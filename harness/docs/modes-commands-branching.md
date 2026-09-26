@@ -13,7 +13,7 @@ Defined by the campaign (`modes.presentation.enabled`, `default`, `allowed_trans
 
 ## Commands (`commands/router.js`)
 
-Enabled per campaign (`commands.enabled`, `aliases`). Available handlers:
+Enabled per campaign (`commands.enabled`, `aliases`). The canonical form is `/name args` (CLI, OpenClaw UI, internal routing). **In Discord the prefix is `!`** (`campaign.json → discord.command_prefix`, default `!`): `!status`, `!context novelist`, `!mode play`, `!sync --status`. The Discord transport rewrites only the leading `!name` to `/name`; arguments and semantics are unchanged, and `/` in Discord belongs to OpenClaw's own slash commands (see [transports.md](transports.md)). Available handlers:
 
 | Command | Effect |
 |---|---|

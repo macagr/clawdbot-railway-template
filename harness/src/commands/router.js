@@ -38,26 +38,33 @@ export const COMMAND_HELP = {
  * Route a command line. `deps` = { store, runner, sessions, clock, caller, adapter?, env, log, reopen() }.
  * Returns { text, handled }.
  */
-export async function routeCommand(line, deps, { transport = "cli", eventId, player } = {}) {
+/**
+ * Route a canonical command line (always "/name args"). `prefix` only changes how command names
+ * are rendered back to the user (a transport such as Discord may present "!" instead of "/").
+ */
+export async function routeCommand(line, deps, { transport = "cli", eventId, player, prefix = "/" } = {}) {
   const cmd = parseCommand(line);
   if (!cmd) return { handled: false };
   const { store } = deps;
   const enabled = new Set(store.manifest.commands.enabled);
   const aliases = store.manifest.commands.aliases || {};
   const name = aliases[cmd.name] || cmd.name;
-  if (!enabled.has(name) || !HANDLERS[name]) return { handled: true, text: `Unknown or disabled command /${cmd.name}. ${enabled.has("help") ? "Try /help." : ""}` };
+  if (!enabled.has(name) || !HANDLERS[name]) return { handled: true, text: `Unknown or disabled command ${prefix}${cmd.name}.${enabled.has("help") ? ` Try ${prefix}help.` : ""}` };
   try {
-    const text = await HANDLERS[name]({ ...deps, cmd, transport, eventId, player });
+    const text = await HANDLERS[name]({ ...deps, cmd, transport, eventId, player, prefix });
     return { handled: true, text };
   } catch (err) {
     deps.log?.error?.(`[command /${name}] ${err.stack || err.message}`);
-    return { handled: true, text: `/${name} failed: ${err.message}` };
+    return { handled: true, text: `${prefix}${name} failed: ${err.message}` };
   }
 }
 
+/** Command names the router knows (before campaign enable/alias filtering). */
+export const COMMAND_NAMES = Object.freeze(Object.keys(COMMAND_HELP));
+
 const HANDLERS = {
-  async help({ store }) {
-    return store.manifest.commands.enabled.filter((c) => COMMAND_HELP[c]).map((c) => COMMAND_HELP[c]).join("\n");
+  async help({ store, prefix = "/" }) {
+    return store.manifest.commands.enabled.filter((c) => COMMAND_HELP[c]).map((c) => COMMAND_HELP[c].replace(/^\//, prefix)).join("\n");
   },
 
   async status({ store, runner, clock, adapter }) {

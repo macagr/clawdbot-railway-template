@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { createHarness } from "./app.js";
 import { CampaignStore } from "./state/store.js";
 import { TextTransport } from "./transport/text.js";
-import { DiscordTransport } from "./transport/discord.js";
+import { DiscordTransport, discordCommandLine, discordCommandPrefix } from "./transport/discord.js";
 import { routeCommand } from "./commands/router.js";
 import { validateCampaign, reconstructCheck, exportState, importState, repairLock, scanGenericTree } from "./ops/tools.js";
 import { dryRunSave } from "./persistence/save.js";
@@ -23,7 +23,7 @@ const USAGE = `rp <command> [options]
 
 Play
   turn --campaign <dir> [--event-id <id>] [--transport cli|discord|openclaw-ui] [--player <id>] [--show-stop|--hide-stop] (--text <t> | --stdin)
-  command --campaign <dir> [--event-id <id>] [--transport <t>] -- /<command> [args]
+  command --campaign <dir> [--event-id <id>] [--transport <t>] -- /<command> [args]   (--transport discord also accepts the Discord prefix form, e.g. !status)
   discord --campaign <dir> --event <json-file|->      handle one normalized Discord event; prints JSON {chunks, turn_id}
   deliver --campaign <dir> --turn <id> [--message-id <id>...]   mark a committed turn delivered
   pending --campaign <dir>                            list committed-but-undelivered turns
@@ -110,6 +110,9 @@ export async function main(argv = process.argv.slice(2), { env = process.env } =
       const t = new TextTransport(h, { name: transport });
       const showStop = f["show-stop"] ? true : f["hide-stop"] ? false : null;
       if (transport === "discord") {
+        // Discord boundary: "<prefix>name args" (or an enabled "/name") is a command, never a turn.
+        const line = discordCommandLine(text, h.store.manifest);
+        if (line) { const r = await routeCommand(line, h, { transport, eventId: f["event-id"], player: f.player, prefix: discordCommandPrefix(h.store.manifest) }); print(r.text); return 0; }
         const res = await h.runner.run({ text: String(text).trim(), eventId: f["event-id"], transport, player: f.player, showStop });
         print(res.output); return res.failed ? 2 : 0;
       }
@@ -117,9 +120,11 @@ export async function main(argv = process.argv.slice(2), { env = process.env } =
       print(res.text); return res.failed ? 2 : 0;
     }
     case "command": {
-      const line = (args.rest || []).join(" ") || f.line;
+      let line = (args.rest || []).join(" ") || f.line;
       if (!line) throw new Error("no command (use -- /status)");
-      const r = await routeCommand(line, h, { transport, eventId: f["event-id"], player: f.player });
+      let prefix = "/";
+      if (transport === "discord") { line = discordCommandLine(line, h.store.manifest) || line; prefix = discordCommandPrefix(h.store.manifest); }
+      const r = await routeCommand(line, h, { transport, eventId: f["event-id"], player: f.player, prefix });
       print(r.handled ? r.text : "not a command"); return 0;
     }
     case "discord": {

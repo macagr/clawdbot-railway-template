@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { makeRunner } from "./runner-helpers.js";
 import { directorPacket, NOVELIST_PROSE, EDITOR_OK } from "./fixtures/packets.js";
-import { DiscordTransport, chunkForDiscord, authorizeDiscordEvent, normalizeDiscordEvent } from "../src/transport/discord.js";
+import { DiscordTransport, chunkForDiscord, authorizeDiscordEvent, normalizeDiscordEvent, discordCommandLine, discordCommandPrefix } from "../src/transport/discord.js";
 import { TextTransport } from "../src/transport/text.js";
 import { silentLogger } from "../src/lib/log.js";
 
@@ -48,13 +48,54 @@ test("discord: duplicate message ids, command routing, delivery record, pending 
   } finally { r.cleanup(); }
 });
 
+test("discord command prefix: !cmd reaches the harness command, args preserved, unknown !foo is not a turn, prose stays play, / still works", async () => {
+  const r = makeRunner({ responses: { director: [directorPacket()], novelist: [NOVELIST_PROSE], editor: [EDITOR_OK] } });
+  try {
+    const m = r.store.manifest;
+    assert.equal(discordCommandPrefix(m), "!");
+    assert.equal(discordCommandLine("!status", m), "/status");
+    assert.equal(discordCommandLine("  !context novelist ", m), "/context novelist");
+    assert.equal(discordCommandLine("!sync --status", m), "/sync --status");
+    assert.equal(discordCommandLine("!mode play", m), "/mode play");
+    assert.equal(discordCommandLine("!ooc hello   there", m), "/ooc hello   there", "argument text preserved");
+    assert.equal(discordCommandLine("!BRANCH list", m), "/branch list");
+    assert.equal(discordCommandLine("!foo bar", m), "/foo bar", "unknown names still route to the router's unknown-command answer");
+    for (const play of ["I wait.", "Hello! How are you?", "! alone with a space", "!", "!123", "She shouted 'no!' and ran.", "Fine!status", "!-x"]) assert.equal(discordCommandLine(play, m), null, `${JSON.stringify(play)} is play`);
+    assert.equal(discordCommandLine("/status", m), "/status", "enabled canonical slash commands still accepted at the boundary");
+    assert.equal(discordCommandLine("/nonsense", m), null, "unknown slash text is not a harness command");
+    const custom = structuredClone(m); custom.discord.command_prefix = "!!";
+    assert.equal(discordCommandLine("!!status", custom), "/status"); assert.equal(discordCommandLine("!status", custom), null);
+
+    const d = new DiscordTransport(deps(r));
+    let c = await d.handleInbound(ev({ message_id: "c1", text: "!status" }));
+    assert.equal(c.command, true); assert.equal(c.command_line, "/status"); assert.match(c.chunks[0], /revision 0/);
+    assert.equal(r.store.meta().revision, 0, "no turn");
+    c = await d.handleInbound(ev({ message_id: "c2", text: "!context" }));
+    assert.match(c.chunks[0], /Director selection/);
+    c = await d.handleInbound(ev({ message_id: "c3", text: "!mode play" }));
+    assert.match(c.chunks[0], /Already in play/);
+    c = await d.handleInbound(ev({ message_id: "c4", text: "!help" }));
+    assert.match(c.chunks[0], /^!help — /m); assert.match(c.chunks[0], /!status — /); assert.doesNotMatch(c.chunks[0], /^\/[a-z]/m);
+    c = await d.handleInbound(ev({ message_id: "c5", text: "!foo bar" }));
+    assert.equal(c.command, true); assert.match(c.chunks[0], /Unknown or disabled command !foo\. Try !help\./);
+    assert.equal(r.store.meta().revision, 0, "unknown prefixed command created no turn");
+    assert.equal(r.store.listTurnIds().length, 0);
+    const play = await d.handleInbound(ev({ message_id: "p1", text: "Hello! I keep working on the car." }));
+    assert.ok(play.turn_id); assert.equal(r.store.meta().revision, 1);
+    const dup = await d.handleInbound(ev({ message_id: "p1", text: "Hello! I keep working on the car." }));
+    assert.equal(dup.reused, true); assert.equal(r.store.meta().revision, 1, "idempotent on message id");
+    const sameCmdAgain = await d.handleInbound(ev({ message_id: "c1", text: "!status" }));
+    assert.match(sameCmdAgain.chunks[0], /revision 1/, "commands are not deduplicated (they are reads/ops, not turns)");
+  } finally { r.cleanup(); }
+});
+
 test("discord: threads never create branches implicitly", async () => {
   const r = makeRunner({ manifestPatch: (m) => { m.discord.threads = "branches_on_request"; return m; } });
   try {
     const d = new DiscordTransport(deps(r));
     const res = await d.handleInbound(ev({ message_id: "m9", thread_id: "th1", channel_id: "th1", text: "I sneak out." }));
     assert.equal(res.refused, true);
-    assert.match(res.chunks[0], /\/branch create/);
+    assert.match(res.chunks[0], /!branch create/);
     assert.equal(r.store.meta().revision, 0);
   } finally { r.cleanup(); }
 });

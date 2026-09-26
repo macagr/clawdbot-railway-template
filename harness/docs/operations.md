@@ -59,11 +59,14 @@ Nothing in the harness invents missing canon; recovery is restore-based.
 - The harness ships in the image (`/opt/rp-harness`); state lives on the volume. Upgrades change code, never state, unless `schema_version` in `meta.json` changes, in which case the release notes describe a migration command.
 - Before upgrading: `/save`, `rp export-state`, volume snapshot. After: `rp validate`, `rp reconstruct-check`, `rp smoke-test`.
 - OpenClaw upgrades: verify `openclaw agent --json` output still carries `payloads[].text` (adapter contract) and re-run `rp setup-openclaw --dry-run` to compare config.
+- Harness upgrades that change generated OpenClaw config (tool policy, Discord plugin/policy keys, coordinator `AGENTS.md`) take effect only after `rp setup-openclaw --campaign <dir>` is re-run for each installed campaign and the gateway restarted. Setup is idempotent and merges bindings and allowlists, so re-running it is always safe.
 
 ## Security boundaries
 
-- Player: Discord allowlists at OpenClaw (`users`, `commands.allowFrom`) and again in the harness (`campaign.json → discord`).
-- Coordinator: `tools.exec.mode: allowlist` plus one path-only approval entry for `/opt/rp-harness/bin/rp` in the exec-approvals store; never reads campaign files. Verify with `openclaw approvals get --gateway --agent <CAMPAIGN_ID>`.
+- Player: Discord allowlists at OpenClaw (`channels.discord.groupPolicy: allowlist`, per-channel `users`, `commands.allowFrom`) and again in the harness (`campaign.json → discord`). Players are never made OpenClaw command owners; `commands.ownerAllowFrom` is an operator/deployment setting that `rp setup-openclaw` does not touch.
+- Coordinator: tools `exec` + `message` only; `tools.exec.mode: allowlist` plus one path-only approval entry for `/opt/rp-harness/bin/rp` in the exec-approvals store; never reads campaign files. Verify with `openclaw approvals get --gateway --agent <CAMPAIGN_ID>`.
+- OpenClaw Doctor warnings about missing memory, `skill_workshop` or autonomous-memory features on campaign agents are expected and intentional: authority is explicit harness state + canonical package + committed turns, and OpenClaw conversational memory is not canon.
+- Discord commands use the `!` prefix (`!status`); `/status` in Discord is OpenClaw's own command. See [transports.md](transports.md).
 - Specialists: no tools; every task is a self-contained message.
 - Secrets: provider keys and persistence tokens are env vars; never written to the workspace; logs redact bearer tokens and key-like strings.
 - Campaign repository: `CAMPAIGNS_REPO_TOKEN` should be a GitHub fine-grained personal access token scoped only to the campaign repository with repository **Contents: read-only** permission. `rp campaign source-sync` passes it to each git process as `-c http.extraHeader=Authorization: Basic …` (username `x-access-token`) with credential helpers disabled for that process; the remote URL stays the plain HTTPS URL and nothing is written to `.git/config` or `.git-credentials`. Git output is scrubbed of the token and header before it can reach an error message or the console. Tests: `test/campaign-source.test.js`.

@@ -6,8 +6,8 @@ All commands take `--campaign <workspace dir>` unless noted. Exit codes: 0 ok, 1
 
 | Command | Description |
 |---|---|
-| `rp turn [--event-id <id>] [--transport cli\|discord\|openclaw-ui] [--player <id>] [--show-stop\|--hide-stop] (--text <t> \| --stdin)` | run one turn; prints the player-facing output (stop line per `output.show_stop_reason` unless overridden) |
-| `rp command [--event-id <id>] [--transport <t>] -- /<cmd> [args]` | run a slash command |
+| `rp turn [--event-id <id>] [--transport cli\|discord\|openclaw-ui] [--player <id>] [--show-stop\|--hide-stop] (--text <t> \| --stdin)` | run one turn; prints the player-facing output (stop line per `output.show_stop_reason` unless overridden). With `--transport discord`, a message that is a prefixed command (`!status`, `!foo`) is routed as a command and never becomes a turn |
+| `rp command [--event-id <id>] [--transport <t>] -- /<cmd> [args]` | run a harness command; with `--transport discord` the Discord prefix form (`-- !status`, `-- !sync --status`) is accepted and answers render with the prefix |
 | `rp discord --event <file\|->` | handle a normalized Discord event `{message_id, channel_id, guild_id, user_id, thread_id?, text}`; prints `{chunks, turn_id}` |
 | `rp deliver --turn <id> [--message-id <id>]... [--transport <t>]` | mark a committed turn delivered |
 | `rp pending` | committed-but-undelivered turns |
@@ -35,7 +35,7 @@ All commands take `--campaign <workspace dir>` unless noted. Exit codes: 0 ok, 1
 | `rp campaign install --from <pkg> --to <workspace>` | copy a package, never touching existing state |
 | `rp campaign source-sync [--json]` (no `--campaign`) | clone or fast-forward the private campaign repository into `CAMPAIGNS_REPO_DIR`; prints `cloned` / `already current` / `fast-forwarded` / `refused` with short SHAs; exit 1 when refused or failed |
 | `rp campaign update <campaign-id> [--workspaces-root <dir>] [--json]` (no `--campaign`) | `source-sync`, then install `<CAMPAIGNS_REPO_DIR>/<campaign-id>` into `<workspaces root>/<campaign-id>` (live `state/ runtime/ branches/ persistence/` untouched), then validate; names the failing stage (`source-sync`, `resolve`, `install`, `validate`) on exit 1. Never runs `setup-openclaw`, never touches bindings, OpenClaw or live state |
-| `rp setup-openclaw [--dry-run] [--rp-bin <path>] [--workspaces-root <dir>]` | write workspace files, apply OpenClaw config (`tools.exec.mode: allowlist`), add the exec-approval allowlist entry for `rp`; exit 4 with an `ACTION REQUIRED` command if the approval could not be added |
+| `rp setup-openclaw [--dry-run] [--rp-bin <path>] [--workspaces-root <dir>]` | write workspace files, apply OpenClaw config (agents, Discord plugin enabled, `channels.discord.groupPolicy: allowlist`, channel allowlist, `tools.exec.mode: allowlist`), merge this campaign's Discord binding and player allowlist into the existing lists (read from `$OPENCLAW_STATE_DIR/openclaw.json`; other campaigns' bindings are preserved), add the exec-approval allowlist entry for `rp`; exit 4 with an `ACTION REQUIRED` command if the approval could not be added. Never writes `commands.ownerAllowFrom` |
 | `rp sillytavern import --file <card.json> [--id <id>] [--force]` / `rp sillytavern export --voice <id> --out <file>` | card adapter |
 
 ## Environment

@@ -142,7 +142,8 @@ const scenarios = {
     console.log(`Discord transport smoke test (manual):
 1. Fill campaign.json → discord (guild_id, channel_id, user_ids) in a disposable campaign copy and run: rp setup-openclaw --campaign <dir>
 2. Restart the gateway; check: openclaw agents list --bindings ; openclaw channels status --probe
-3. In the bound channel send: /status   → the coordinator must run 'rp command' and relay the status text.
+3. In the bound channel send: !status   → the coordinator must run 'rp command' and relay the status text.
+   (Do not use /status in Discord: "/" is OpenClaw's native slash-command namespace and OpenClaw answers it itself.)
 4. Send a play message; the coordinator runs 'rp turn --transport discord --event-id <message id>' and posts the prose.
 5. Verify: rp pending --campaign <dir> lists the turn until 'rp deliver' is run by the coordinator; re-sending the same message id must not create a new revision.
 Sample event for 'rp discord --event -':

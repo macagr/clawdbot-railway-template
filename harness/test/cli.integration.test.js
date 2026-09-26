@@ -43,6 +43,17 @@ test("CLI end to end: install, turn via stdin, status, validate, dry-run-save, p
     assert.match(r.out, /"turns": 1/);
     r = rp(["turn", "--campaign", ws, "--event-id", "d-1", "--transport", "discord", "--text", "again"], { env });
     assert.equal(r.code, 0, r.err);
+    // Discord boundary in the CLI: prefixed commands never become turns, on either entry point
+    r = rp(["turn", "--campaign", ws, "--event-id", "d-cmd", "--transport", "discord", "--text", "!status"], { env });
+    assert.equal(r.code, 0, r.err); assert.match(r.out, /revision 2/);
+    r = rp(["command", "--campaign", ws, "--transport", "discord", "--", "!sync", "--status"]);
+    assert.equal(r.code, 0, r.err); assert.match(r.out, /sync status|no persistence|failed/);
+    r = rp(["command", "--campaign", ws, "--transport", "discord", "--", "!nothing"]);
+    assert.match(r.out, /Unknown or disabled command !nothing\. Try !help\./);
+    r = rp(["command", "--campaign", ws, "--", "/nothing"]);
+    assert.match(r.out, /Unknown or disabled command \/nothing\. Try \/help\./, "CLI keeps the canonical form");
+    r = rp(["status", "--campaign", ws]);
+    assert.match(r.out, /revision 2/, "no turn was created by prefixed commands");
     r = rp(["pending", "--campaign", ws]);
     assert.match(r.out, /campaign_fixture-000002/);
     r = rp(["deliver", "--campaign", ws, "--turn", "campaign_fixture-000002", "--message-id", "m1", "--transport", "discord"]);

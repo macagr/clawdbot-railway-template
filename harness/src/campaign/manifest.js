@@ -41,7 +41,8 @@ export const DEFAULTS = Object.freeze({
   commands: { enabled: ["save", "sync", "status", "context", "mode", "scene", "good", "flat", "ooc", "branch", "resume", "help"], aliases: {} },
   save: { adapter: "none", session_summary: false, timeout_ms: 30000, retries: 2, local_dir: "persistence" },
   sessions: { reset_on_resume: true, reset_on_scene_end: true, token_threshold: 120000 },
-  discord: { threads: "off" },
+  // Discord: harness commands use a prefix (default "!") because "/" is OpenClaw's native slash-command namespace.
+  discord: { threads: "off", command_prefix: "!" },
   output: { max_chars: 3500, show_presentation_tag: true, show_stop_reason: true },
   roles: {},
 });

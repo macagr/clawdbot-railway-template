@@ -56,7 +56,7 @@ A campaign package is a directory. Installing it (`rp campaign install --from <p
   "commands": { "enabled": ["save", "sync", "status", "context", "mode", "scene", "good", "flat", "ooc", "branch", "resume", "help"] },
   "save": { "adapter": "webhook", "endpoint_env": "RP_SAVE_URL", "token_env": "RP_SAVE_TOKEN", "sync_endpoint_env": "RP_SYNC_URL", "session_summary": true },
   "sessions": { "reset_on_resume": true, "reset_on_scene_end": true, "token_threshold": 120000 },
-  "discord": { "guild_id": "…", "channel_id": "…", "user_ids": ["…"], "threads": "off" },
+  "discord": { "guild_id": "…", "channel_id": "…", "user_ids": ["…"], "threads": "off", "command_prefix": "!" },
   "output": { "max_chars": 3500, "show_presentation_tag": true, "show_stop_reason": true },
   "denylist": "denylist.txt"
 }

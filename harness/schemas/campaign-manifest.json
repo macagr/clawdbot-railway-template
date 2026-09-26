@@ -188,7 +188,8 @@
         "guild_id": { "type": "string", "maxLength": 64 },
         "channel_id": { "type": "string", "maxLength": 64 },
         "user_ids": { "type": "array", "items": { "type": "string", "maxLength": 64 } },
-        "threads": { "enum": ["off", "sessions", "branches_on_request"] }
+        "threads": { "enum": ["off", "sessions", "branches_on_request"] },
+        "command_prefix": { "type": "string", "minLength": 1, "maxLength": 3, "pattern": "^[^\\sA-Za-z0-9/]+$" }
       }
     },
     "output": {

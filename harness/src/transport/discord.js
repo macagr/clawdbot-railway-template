@@ -1,6 +1,6 @@
 // Discord transport helpers. OpenClaw performs the actual Discord I/O; the harness sees a
 // normalized inbound event and produces reply chunks. This module never touches canon.
-import { routeCommand, isCommand } from "../commands/router.js";
+import { routeCommand, parseCommand } from "../commands/router.js";
 
 export const DISCORD_LIMIT = 2000;
 
@@ -30,6 +30,37 @@ export function authorizeDiscordEvent(manifest, e) {
     if (policy === "off") return { ok: false, reason: "threads are disabled for this campaign" };
   }
   return { ok: true };
+}
+
+/** The Discord command prefix for a campaign ("!" unless campaign.json → discord.command_prefix says otherwise). */
+export function discordCommandPrefix(manifest) {
+  return manifest?.discord?.command_prefix || "!";
+}
+
+/**
+ * Translate a Discord message into a canonical harness command line, or null when it is play input.
+ * Only "<prefix><name> [args]" is a command; "<prefix>" alone, "<prefix> text" or "<prefix>123" are not.
+ * Arguments are passed through verbatim (only the prefix/name are rewritten to "/name args").
+ * Unknown names still translate (the router answers with its unknown-command text), so "!foo"
+ * never becomes a turn. Canonical "/name" lines are also accepted unchanged for commands the
+ * campaign has enabled, so a slash command OpenClaw did not intercept still reaches the harness.
+ * Neither form is ever applied to anything but the whole trimmed message.
+ */
+export function discordCommandLine(text, manifest) {
+  const prefix = discordCommandPrefix(manifest);
+  const s = String(text ?? "").trim();
+  if (s.startsWith(prefix)) {
+    const m = s.slice(prefix.length).match(/^([a-z][a-z0-9_-]*)(?:\s+([\s\S]*))?$/i);
+    if (!m) return null;
+    return m[2] !== undefined && m[2].trim() ? `/${m[1].toLowerCase()} ${m[2].trim()}` : `/${m[1].toLowerCase()}`;
+  }
+  const slash = parseCommand(s);
+  if (slash) {
+    const aliases = manifest?.commands?.aliases || {};
+    const enabled = manifest?.commands?.enabled || [];
+    if (enabled.includes(aliases[slash.name] || slash.name)) return s;
+  }
+  return null;
 }
 
 /** Split output into Discord-sized chunks on paragraph, then sentence, boundaries. */
@@ -67,13 +98,16 @@ export class DiscordTransport {
     const auth = authorizeDiscordEvent(this.deps.store.manifest, e);
     if (!auth.ok) return { refused: true, reason: auth.reason, chunks: [] };
     const eventId = `discord:${e.message_id}`;
-    if (isCommand(e.text)) {
-      const r = await routeCommand(e.text, this.deps, { transport: "discord", eventId, player: e.user_id });
-      return { chunks: chunkForDiscord(r.text || ""), command: true };
+    const manifest = this.deps.store.manifest;
+    const prefix = discordCommandPrefix(manifest);
+    const line = discordCommandLine(e.text, manifest);
+    if (line) {
+      const r = await routeCommand(line, this.deps, { transport: "discord", eventId, player: e.user_id, prefix });
+      return { chunks: chunkForDiscord(r.text || ""), command: true, command_line: line };
     }
-    if (e.thread_id && (this.deps.store.manifest.discord?.threads || "off") === "branches_on_request") {
-      // A thread never creates a branch by itself; the player must /branch create explicitly.
-      return { chunks: chunkForDiscord("Threads only host branches here. Run `/branch create <id>` in this thread first, then play."), refused: true, reason: "thread without branch" };
+    if (e.thread_id && (manifest.discord?.threads || "off") === "branches_on_request") {
+      // A thread never creates a branch by itself; the player must create the branch explicitly.
+      return { chunks: chunkForDiscord(`Threads only host branches here. Run \`${prefix}branch create <id>\` in this thread first, then play.`), refused: true, reason: "thread without branch" };
     }
     const res = await this.deps.runner.run({ text: e.text, eventId, transport: "discord", player: e.user_id });
     return { chunks: chunkForDiscord(res.output || ""), turn_id: res.turn?.turn_id, reused: Boolean(res.reused), failed: Boolean(res.failed) };
