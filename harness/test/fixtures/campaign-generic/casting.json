@@ -19,5 +19,5 @@
   "archetypes": {
     "functionary": { "register": "formal", "status": "defers" }
   },
-  "voice_defaults": "_generic"
+  "voice_defaults": "generic"
 }

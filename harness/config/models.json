@@ -1,0 +1,13 @@
+{
+  "providers": {
+    "openai": { "base_url": "https://api.openai.com/v1", "api_key_env": "OPENAI_API_KEY" },
+    "openrouter": { "base_url": "https://openrouter.ai/api/v1", "api_key_env": "OPENROUTER_API_KEY", "headers": { "X-Title": "rp-harness" } },
+    "openclaw": { "kind": "openclaw-cli" },
+    "fake": { "kind": "fake" }
+  },
+  "aliases": {
+    "fast": { "model": "openrouter/<FAST_MODEL>", "temperature": 0.3 },
+    "strong": { "model": "openrouter/<STRONG_MODEL>", "temperature": 0.5 },
+    "prose": { "model": "openrouter/<PROSE_MODEL>", "temperature": 0.9 }
+  }
+}
