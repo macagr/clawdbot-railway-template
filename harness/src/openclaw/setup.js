@@ -17,10 +17,12 @@ export function openclawConfigFor(store, { rpBin = "/opt/rp-harness/bin/rp", wor
   const root = workspacesRoot || path.dirname(store.root);
   const coordinatorModel = m.roles.coordinator?.model;
   const entries = {};
+  // Tool policy: an empty `allow` list counts as unset in OpenClaw (full catalog, ~23k tokens of
+  // schemas per call). Use the minimal profile; the coordinator adds exec, specialists deny all.
   entries[id] = {
     workspace: store.root,
     ...(coordinatorModel && !coordinatorModel.startsWith("fake/") ? { model: coordinatorModel } : {}),
-    tools: { allow: ["exec"] },
+    tools: { profile: "minimal", alsoAllow: ["exec"] },
     skills: [],
     subagents: { allowAgents: [] },
   };
@@ -33,7 +35,7 @@ export function openclawConfigFor(store, { rpBin = "/opt/rp-harness/bin/rp", wor
     entries[agentId] = {
       workspace: path.join(root, `${id}-${role}`),
       ...(rc.model && !rc.model.startsWith("fake/") && !rc.model.startsWith("openclaw:") ? { model: rc.model } : {}),
-      tools: { allow: [] },
+      tools: { profile: "minimal", deny: ["*"] },
       skills: [],
       subagents: { allowAgents: [] },
     };
@@ -68,7 +70,6 @@ export function openclawConfigFor(store, { rpBin = "/opt/rp-harness/bin/rp", wor
 export const ALLOWED_CONFIG_KEY_PATTERNS = [
   /^agents\.entries\.[a-z][a-z0-9_-]*$/,
   /^agents\.entries\.[a-z][a-z0-9_-]*\.memory\.enabled$/,
-  /^agents\.entries\.[a-z][a-z0-9_-]*\.promptMode$/,
   /^agents\.ownership$/,
   /^bindings$/,
   /^channels\.discord\.guilds\.[^.]+\.channels\.[^.]+$/,
@@ -105,9 +106,6 @@ export function configSetOps(cfg) {
   ops.push(["tools.exec.ask", undefined, { op: "unset", optional: true }]);
   ops.push(["tools.exec.mode", cfg.tools.exec.mode]);
   for (const agentId of cfg.memory.agents) ops.push([`agents.entries.${agentId}.memory.enabled`, false, { optional: true }]);
-  // Specialists receive self-contained tasks; a minimal prompt mode drops OpenClaw's memory,
-  // identity and messaging sections from their system prompt. Tolerated if the key is rejected.
-  for (const agentId of cfg.specialists || []) ops.push([`agents.entries.${agentId}.promptMode`, "minimal", { optional: true }]);
   if (cfg.commands) ops.push(["commands.allowFrom.discord", cfg.commands.allowFrom.discord, { merge: "list" }]);
   return ops;
 }

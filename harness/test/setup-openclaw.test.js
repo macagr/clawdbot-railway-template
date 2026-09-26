@@ -11,8 +11,10 @@ test("openclaw config: one coordinator + specialists, explicit ownership, Discor
     const cfg = openclawConfigFor(r.store, { rpBin: "/opt/rp-harness/bin/rp", workspacesRoot: "/data/workspaces" });
     assert.deepEqual(Object.keys(cfg.agents.entries), ["campaign_fixture", "campaign_fixture-director", "campaign_fixture-novelist", "campaign_fixture-editor"]);
     assert.equal(cfg.agents.ownership, "explicit");
-    assert.deepEqual(cfg.agents.entries.campaign_fixture.tools, { allow: ["exec"] });
-    assert.deepEqual(cfg.agents.entries["campaign_fixture-director"].tools, { allow: [] });
+    // empty allow lists count as unset in OpenClaw (full tool catalog); use profile minimal + deny/alsoAllow
+    assert.deepEqual(cfg.agents.entries.campaign_fixture.tools, { profile: "minimal", alsoAllow: ["exec"] });
+    assert.deepEqual(cfg.agents.entries["campaign_fixture-director"].tools, { profile: "minimal", deny: ["*"] });
+    for (const e of Object.values(cfg.agents.entries)) assert.ok(!("allow" in e.tools && e.tools.allow.length === 0), "no empty allow lists");
     assert.equal(cfg.agents.entries["campaign_fixture-director"].workspace, path.join("/data/workspaces", "campaign_fixture-director"));
     assert.equal(cfg.bindings[0].match.peer.id, "channel_fixture");
     assert.equal(cfg.bindings[0].match.guildId, "guild_fixture");
@@ -25,9 +27,7 @@ test("openclaw config: one coordinator + specialists, explicit ownership, Discor
     assert.ok(ops.some(([k]) => k === "bindings"));
     assert.ok(ops.some(([k]) => k === "tools.sessions.visibility"));
     assert.ok(ops.some(([k, v]) => k === "tools.exec.mode" && v === "allowlist"));
-    const pm = ops.filter(([k]) => k.endsWith(".promptMode"));
-    assert.deepEqual(pm.map(([k]) => k), ["agents.entries.campaign_fixture-director.promptMode", "agents.entries.campaign_fixture-novelist.promptMode", "agents.entries.campaign_fixture-editor.promptMode"], "specialists only, never the coordinator");
-    assert.ok(pm.every(([, v, o]) => v === "minimal" && o.optional));
+    assert.ok(!ops.some(([k]) => k.endsWith(".promptMode")), "promptMode is not a per-agent key in 2026.9.5");
   } finally { r.cleanup(); }
 });
 

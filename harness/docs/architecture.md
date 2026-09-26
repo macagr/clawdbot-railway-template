@@ -54,7 +54,7 @@ The harness calls specialist agents synchronously with `openclaw agent --agent <
 
 `rp setup-openclaw` derives from `campaign.json`:
 
-- `agents.ownership: "explicit"`; `agents.entries.<CAMPAIGN_ID>` (workspace = campaign dir, `tools.allow: ["exec"]`) and one entry per specialist role with `tools.allow: []`, separate workspaces `<root>/<CAMPAIGN_ID>-<role>`.
+- `agents.ownership: "explicit"`; `agents.entries.<CAMPAIGN_ID>` (workspace = campaign dir, `tools: { profile: "minimal", alsoAllow: ["exec"] }`) and one entry per specialist role with `tools: { profile: "minimal", deny: ["*"] }` (an empty `allow` list means "all tools" in OpenClaw), separate workspaces `<root>/<CAMPAIGN_ID>-<role>` with one-line identity files and no `BOOTSTRAP.md`.
 - `bindings[]`: Discord guild + channel → coordinator.
 - `channels.discord.guilds.<guild>.channels.<channel>`: `requireMention: false`, `users` allowlist. (`historyLimit` is channel-wide in OpenClaw; set `channels.discord.historyLimit` yourself if you want less Discord history in the coordinator's context. The coordinator relays only, so it is not required.)
 - `tools.agentToAgent.enabled`, `tools.sessions.visibility: "agent"`, `tools.exec.mode: "allowlist"`, `commands.allowFrom.discord`.
