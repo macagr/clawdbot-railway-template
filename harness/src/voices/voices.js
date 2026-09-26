@@ -15,6 +15,9 @@ export function loadVoiceCard(store, id) {
   if (exists(jsonPath)) return schemas.validate("voice-card", readJson(jsonPath));
   const mdPath = path.join(dir, `${id}.md`);
   if (exists(mdPath)) return schemas.validate("voice-card", { id, style_only: true, notes: fs.readFileSync(mdPath, "utf8").slice(0, 2000) });
+  // Generated cards (casting) live in state so they are committed transactionally.
+  const generated = path.join(store.stateRoot, "voices", `${id}.json`);
+  if (exists(generated)) return schemas.validate("voice-card", readJson(generated));
   return null;
 }
 

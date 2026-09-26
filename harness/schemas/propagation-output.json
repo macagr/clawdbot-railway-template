@@ -1,0 +1,10 @@
+{
+  "$id": "propagation-output.json",
+  "title": "Model-assisted propagation pass output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["events"],
+  "properties": {
+    "events": { "type": "array", "maxItems": 40, "items": { "$ref": "director-packet.json#/$defs/knowledgeEventProposal" } }
+  }
+}
