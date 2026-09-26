@@ -11,6 +11,7 @@ test("init creates seeded state and runtime files, idempotently", () => {
   try {
     assert.equal(store.meta().revision, 0);
     assert.equal(store.scene().location, "location_a");
+    assert.equal(store.scene().scene_id, "scene_seed");
     assert.equal(store.facts().length, 4);
     assert.ok(store.mind("npc_a"));
     assert.equal(store.craft("npc:npc_a").non_evidential, true);
