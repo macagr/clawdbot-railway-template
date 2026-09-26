@@ -75,9 +75,26 @@ const INTERNAL_GATEWAY_PORT = Number.parseInt(process.env.INTERNAL_GATEWAY_PORT 
 const INTERNAL_GATEWAY_HOST = process.env.INTERNAL_GATEWAY_HOST ?? "127.0.0.1";
 const GATEWAY_TARGET = `http://${INTERNAL_GATEWAY_HOST}:${INTERNAL_GATEWAY_PORT}`;
 
-// Always run the built-from-source CLI entry directly to avoid PATH/global-install mismatches.
-const OPENCLAW_ENTRY = process.env.OPENCLAW_ENTRY?.trim() || "/openclaw/dist/entry.js";
+// Run the CLI entry directly to avoid PATH/global-install mismatches.
+// The official image ships the launcher at /app/openclaw.mjs (it also enforces the Node version).
+const OPENCLAW_ENTRY = process.env.OPENCLAW_ENTRY?.trim() || "/app/openclaw.mjs";
 const OPENCLAW_NODE = process.env.OPENCLAW_NODE?.trim() || "node";
+
+// Bind address for the wrapper. Railway private networking is IPv6-only on legacy environments,
+// so bind dual-stack ("::") by default; override with HOST for other platforms.
+const HOST = process.env.HOST?.trim() || "::";
+
+// Externally reachable HTTPS origin (e.g. the Cloudflare hostname). Written to gateway.publicOrigin so
+// the Control UI websocket passes the gateway's Origin check when served behind the proxy.
+const PUBLIC_ORIGIN = process.env.OPENCLAW_PUBLIC_ORIGIN?.trim() || "";
+
+// SecretRef pointing at the gateway token env var. Stored in config instead of the plaintext token.
+const GATEWAY_TOKEN_REF = { source: "env", provider: "default", id: "OPENCLAW_GATEWAY_TOKEN" };
+
+// Migration gate: the wrapper records which OpenClaw version last ran against this state dir.
+// When the image version changes, the operator must run `openclaw doctor --fix` (after a backup)
+// before the gateway starts. Set OPENCLAW_MIGRATION_GATE=off to disable.
+const MIGRATION_GATE_ENABLED = (process.env.OPENCLAW_MIGRATION_GATE ?? "on").trim().toLowerCase() !== "off";
 
 function clawArgs(args) {
   return [OPENCLAW_ENTRY, ...args];
@@ -143,26 +160,115 @@ let lastGatewayExit = null;
 let lastDoctorOutput = null;
 let lastDoctorAt = null;
 
+// Migration gate state: null when no migration is pending, otherwise { from, to }.
+let migrationRequired = null;
+
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
+
+// --- Version marker / migration gate ---
+
+function versionMarkerPath() {
+  return path.join(STATE_DIR, ".wrapper-openclaw-version");
+}
+
+function parseOpenclawVersion(text) {
+  const m = String(text || "").match(/\d{4}\.\d+\.\d+(?:-[A-Za-z0-9.]+)?/);
+  return m ? m[0] : null;
+}
+
+async function detectOpenclawVersion() {
+  const r = await runCmd(OPENCLAW_NODE, clawArgs(["--version"]), { timeoutMs: 30_000 });
+  return parseOpenclawVersion(r.output);
+}
+
+function readVersionMarker() {
+  try {
+    return fs.readFileSync(versionMarkerPath(), "utf8").trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function writeVersionMarker(version) {
+  if (!version) return;
+  try {
+    fs.mkdirSync(STATE_DIR, { recursive: true });
+    fs.writeFileSync(versionMarkerPath(), `${version}\n`, { encoding: "utf8", mode: 0o600 });
+  } catch (err) {
+    console.warn(`[wrapper] failed to write version marker: ${String(err)}`);
+  }
+}
+
+// Decide whether the persisted state must be migrated before the gateway may start.
+// Does not mutate any state; only reads the marker and the CLI version.
+async function checkMigrationGate() {
+  if (!MIGRATION_GATE_ENABLED || !isConfigured()) {
+    migrationRequired = null;
+    return migrationRequired;
+  }
+  const current = await detectOpenclawVersion();
+  const recorded = readVersionMarker();
+  if (!current) {
+    // Can't tell; don't block, but leave a breadcrumb.
+    console.warn("[wrapper] could not detect openclaw version; migration gate skipped");
+    migrationRequired = null;
+    return migrationRequired;
+  }
+  if (recorded === current) {
+    migrationRequired = null;
+    return migrationRequired;
+  }
+  migrationRequired = { from: recorded || "unknown (no marker; state predates this wrapper, e.g. 2026.3.8)", to: current };
+  return migrationRequired;
+}
+
+function migrationInstructions() {
+  if (!migrationRequired) return "";
+  return [
+    `OpenClaw version changed: ${migrationRequired.from} -> ${migrationRequired.to}.`,
+    "The gateway will not start until the persisted state has been migrated.",
+    "Steps:",
+    "  1. Download a backup from /setup (or snapshot the Railway volume).",
+    "  2. In /setup -> Debug console run `openclaw doctor --fix` (command: openclaw.doctor.fix).",
+    "  3. On success the wrapper records the version and starts the gateway.",
+    "If you already ran doctor yourself, use `migration.acknowledge` instead.",
+    "To roll back instead: redeploy the previous image AND restore the pre-upgrade backup.",
+  ].join("\n");
+}
+
+// Run the operator-requested migration. Only called from an authenticated /setup action.
+async function runMigrationDoctorFix() {
+  const r = await runCmd(OPENCLAW_NODE, clawArgs(["doctor", "--fix", "--non-interactive"]), {
+    timeoutMs: 10 * 60 * 1000,
+  });
+  const output = redactSecrets(r.output || "");
+  lastDoctorOutput = output;
+  lastDoctorAt = Date.now();
+  if (r.code !== 0) {
+    return { ok: false, output: `doctor --fix exited with code ${r.code}. Gateway remains stopped.\n${output}` };
+  }
+  return { ok: true, output };
+}
+
+async function completeMigration() {
+  const current = await detectOpenclawVersion();
+  writeVersionMarker(current);
+  migrationRequired = null;
+  await syncGatewayConfig();
+}
+
+// --- Gateway readiness ---
 
 async function waitForGatewayReady(opts = {}) {
   const timeoutMs = opts.timeoutMs ?? 20_000;
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {
-      // Try the default Control UI base path, then fall back to root.
-      const paths = ["/openclaw", "/"];
-      for (const p of paths) {
-        try {
-          const res = await fetch(`${GATEWAY_TARGET}${p}`, { method: "GET" });
-          // Any HTTP response means the port is open.
-          if (res) return true;
-        } catch {
-          // try next
-        }
-      }
+      // The gateway serves an unauthenticated liveness probe.
+      const res = await fetch(`${GATEWAY_TARGET}/healthz`, { method: "GET" });
+      if (res.ok) return true;
     } catch {
       // not ready
     }
@@ -174,6 +280,7 @@ async function waitForGatewayReady(opts = {}) {
 async function startGateway() {
   if (gatewayProc) return;
   if (!isConfigured()) throw new Error("Gateway cannot start: not configured");
+  if (migrationRequired) throw new Error(`Gateway cannot start: migration required\n${migrationInstructions()}`);
 
   fs.mkdirSync(STATE_DIR, { recursive: true });
   fs.mkdirSync(WORKSPACE_DIR, { recursive: true });
@@ -232,6 +339,7 @@ async function runDoctorBestEffort() {
 
 async function ensureGatewayRunning() {
   if (!isConfigured()) return { ok: false, reason: "not configured" };
+  if (migrationRequired) return { ok: false, reason: `migration required\n${migrationInstructions()}` };
   if (gatewayProc) return { ok: true };
   if (!gatewayStarting) {
     gatewayStarting = (async () => {
@@ -257,18 +365,71 @@ async function ensureGatewayRunning() {
   return { ok: true };
 }
 
-async function restartGateway() {
-  if (gatewayProc) {
+// Stop the gateway and wait for it to actually exit (so SQLite closes and the port is released).
+// Escalates to SIGKILL after timeoutMs.
+async function stopGateway(timeoutMs = 8_000) {
+  const proc = gatewayProc;
+  if (!proc) return;
+  await new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(killTimer);
+      resolve();
+    };
+    const killTimer = setTimeout(() => {
+      try { proc.kill("SIGKILL"); } catch {}
+      // Give the kill a moment to be observed, then move on regardless.
+      setTimeout(finish, 500);
+    }, timeoutMs);
+    proc.once("exit", finish);
+    if (proc.exitCode !== null || proc.signalCode !== null) return finish();
     try {
-      gatewayProc.kill("SIGTERM");
+      proc.kill("SIGTERM");
     } catch {
-      // ignore
+      finish();
     }
-    // Give it a moment to exit and release the port.
-    await sleep(750);
-    gatewayProc = null;
-  }
+  });
+  if (gatewayProc === proc) gatewayProc = null;
+}
+
+async function restartGateway() {
+  await stopGateway();
   return ensureGatewayRunning();
+}
+
+// Write proxy/auth settings into the OpenClaw config.
+// - gateway.auth.token is stored as an env SecretRef (never the plaintext token).
+// - gateway.remote.token is removed; the CLI reads OPENCLAW_GATEWAY_TOKEN from the environment.
+// - gateway.publicOrigin is set when OPENCLAW_PUBLIC_ORIGIN is provided.
+// Called after onboarding, after migration, and at boot only when the token is still plaintext.
+async function syncGatewayConfig() {
+  const set = (args) => runCmd(OPENCLAW_NODE, clawArgs(["config", "set", ...args]));
+  await set(["gateway.auth.mode", "token"]);
+  await set(["--strict-json", "gateway.auth.token", JSON.stringify(GATEWAY_TOKEN_REF)]);
+  await runCmd(OPENCLAW_NODE, clawArgs(["config", "unset", "gateway.remote.token"]));
+  await set(["gateway.bind", "loopback"]);
+  await set(["gateway.port", String(INTERNAL_GATEWAY_PORT)]);
+  // Railway runs behind a reverse proxy (this wrapper). Trust loopback as a proxy hop so
+  // forwarded-client detection stays correct when X-Forwarded-* headers are present.
+  await set(["--strict-json", "gateway.trustedProxies", JSON.stringify(["127.0.0.1"])]);
+  if (PUBLIC_ORIGIN) {
+    await set(["gateway.publicOrigin", PUBLIC_ORIGIN]);
+  }
+}
+
+// True when gateway.auth.token already references the env var (no plaintext token in config).
+// Reads the config file directly (JSON5, keys may be unquoted) and falls back to the CLI.
+async function gatewayTokenIsRef() {
+  try {
+    const text = fs.readFileSync(configPath(), "utf8");
+    if (/id["']?\s*:\s*["']OPENCLAW_GATEWAY_TOKEN["']/.test(text)) return true;
+  } catch {
+    // fall through to CLI
+  }
+  const r = await runCmd(OPENCLAW_NODE, clawArgs(["config", "get", "gateway.auth.token"]));
+  return r.code === 0 && /OPENCLAW_GATEWAY_TOKEN/.test(r.output || "");
 }
 
 function requireSetupAuth(req, res, next) {
@@ -343,6 +504,7 @@ app.get("/healthz", async (_req, res) => {
       configured: isConfigured(),
       stateDir: STATE_DIR,
       workspaceDir: WORKSPACE_DIR,
+      migrationRequired: migrationRequired ? { from: migrationRequired.from, to: migrationRequired.to } : null,
     },
     gateway: {
       target: GATEWAY_TARGET,
@@ -382,6 +544,14 @@ app.get("/setup", requireSetupAuth, (_req, res) => {
   <h1>OpenClaw Setup</h1>
   <p class="muted">This wizard configures OpenClaw by running the same onboarding command it uses in the terminal, but from the browser.</p>
 
+  <div id="migration" class="card" style="display:none; border-color:#b45309; background:#fffbeb">
+    <h2>Migration required</h2>
+    <pre id="migrationText" style="white-space:pre-wrap"></pre>
+    <button id="migrationDoctor" style="background:#b45309">Run openclaw doctor --fix (back up first)</button>
+    <button id="migrationAck" style="background:#444; margin-left:0.5rem">Mark migration done (I already ran doctor)</button>
+    <pre id="migrationOut" style="white-space:pre-wrap"></pre>
+  </div>
+
   <div class="card">
     <h2>Status</h2>
     <div id="status">Loading...</div>
@@ -390,6 +560,10 @@ app.get("/setup", requireSetupAuth, (_req, res) => {
       <a href="/openclaw" target="_blank">Open OpenClaw UI</a>
       &nbsp;|&nbsp;
       <a href="/setup/export" target="_blank">Download backup (.tar.gz)</a>
+    </div>
+    <div class="muted" style="margin-top:0.5rem">
+      <strong>Backups contain secrets.</strong> The archive includes <code>openclaw.json</code>, credentials, auth profiles and sessions
+      (provider keys, channel tokens, the gateway token if stored in config). It is not encrypted. Store it accordingly.
     </div>
 
     <div style="margin-top: 0.75rem">
@@ -412,7 +586,9 @@ app.get("/setup", requireSetupAuth, (_req, res) => {
         <option value="openclaw.status">openclaw status</option>
         <option value="openclaw.health">openclaw health</option>
         <option value="openclaw.doctor">openclaw doctor</option>
-        <option value="openclaw.logs.tail">openclaw logs --tail N</option>
+        <option value="openclaw.doctor.fix">openclaw doctor --fix (migration/repair; back up first)</option>
+        <option value="migration.acknowledge">migration.acknowledge (record current version as migrated)</option>
+        <option value="openclaw.logs.tail">openclaw logs --limit N</option>
         <option value="openclaw.config.get">openclaw config get &lt;path&gt;</option>
         <option value="openclaw.version">openclaw --version</option>
         <option value="openclaw.devices.list">openclaw devices list</option>
@@ -453,6 +629,10 @@ app.get("/setup", requireSetupAuth, (_req, res) => {
 
     <label>Key / Token (if required)</label>
     <input id="authSecret" type="password" placeholder="Paste API key / token if applicable" />
+    <div class="muted" style="margin-top: 0.25rem">
+      Leave blank to use the provider's env var from Railway (e.g. <code>OPENROUTER_API_KEY</code>). The config then stores an
+      env reference instead of the key.
+    </div>
 
     <label>Wizard flow</label>
     <select id="flow">
@@ -466,17 +646,18 @@ app.get("/setup", requireSetupAuth, (_req, res) => {
     <h2>2) Optional: Channels</h2>
     <p class="muted">You can also add channels later inside OpenClaw, but this helps you get messaging working immediately.</p>
 
-    <label>Telegram bot token (optional)</label>
-    <input id="telegramToken" type="password" placeholder="123456:ABC..." />
-    <div class="muted" style="margin-top: 0.25rem">
-      Get it from BotFather: open Telegram, message <code>@BotFather</code>, run <code>/newbot</code>, then copy the token.
-    </div>
-
     <label>Discord bot token (optional)</label>
-    <input id="discordToken" type="password" placeholder="Bot token" />
+    <input id="discordToken" type="password" placeholder="Bot token (leave blank if DISCORD_BOT_TOKEN is set in Railway)" />
     <div class="muted" style="margin-top: 0.25rem">
       Get it from the Discord Developer Portal: create an application, add a Bot, then copy the Bot Token.<br/>
+      Prefer setting <code>DISCORD_BOT_TOKEN</code> as a Railway variable and leaving this blank; the token then never lands in the config file.<br/>
       <strong>Important:</strong> Enable <strong>MESSAGE CONTENT INTENT</strong> in Bot → Privileged Gateway Intents, or the bot will crash on startup.
+    </div>
+
+    <label>Telegram bot token (optional; not bundled in OpenClaw 2026.9.5)</label>
+    <input id="telegramToken" type="password" placeholder="123456:ABC..." />
+    <div class="muted" style="margin-top: 0.25rem">
+      Telegram is no longer a bundled plugin in this OpenClaw version. Unless a Telegram plugin is installed, this field is skipped.
     </div>
 
     <label>Slack bot token (optional)</label>
@@ -578,15 +759,37 @@ const AUTH_GROUPS = [
   ]}
 ];
 
+// Which channel plugins are available in this OpenClaw build.
+// `channels add --help` no longer lists channels, so ask the plugin registry.
+// On failure, report everything as available and let the config/doctor step surface problems.
+async function detectChannelPlugins() {
+  const r = await runCmd(OPENCLAW_NODE, clawArgs(["plugins", "list", "--json"]));
+  const out = r.output || "";
+  const probeFailed = r.code !== 0 || !out.trim();
+  const has = (name) => probeFailed || new RegExp(`"${name}"`).test(out);
+  return {
+    probeFailed,
+    discord: has("discord"),
+    telegram: has("telegram"),
+    slack: has("slack"),
+  };
+}
+
 app.get("/setup/api/status", requireSetupAuth, async (_req, res) => {
   const version = await runCmd(OPENCLAW_NODE, clawArgs(["--version"]));
-  const channelsHelp = await runCmd(OPENCLAW_NODE, clawArgs(["channels", "add", "--help"]));
+  const channels = await detectChannelPlugins();
 
   res.json({
     configured: isConfigured(),
     gatewayTarget: GATEWAY_TARGET,
     openclawVersion: version.output.trim(),
-    channelsAddHelp: channelsHelp.output,
+    channels,
+    migration: migrationRequired ? { required: true, ...migrationRequired, instructions: migrationInstructions() } : { required: false },
+    envDetected: {
+      openrouter: Boolean(process.env.OPENROUTER_API_KEY?.trim()),
+      discord: Boolean(process.env.DISCORD_BOT_TOKEN?.trim()),
+      publicOrigin: PUBLIC_ORIGIN || null,
+    },
     authGroups: AUTH_GROUPS,
   });
 });
@@ -594,6 +797,17 @@ app.get("/setup/api/status", requireSetupAuth, async (_req, res) => {
 app.get("/setup/api/auth-groups", requireSetupAuth, (_req, res) => {
   res.json({ ok: true, authGroups: AUTH_GROUPS });
 });
+
+// Standard provider env vars OpenClaw honors for each API-key auth choice.
+// When the form secret is blank and the env var is set, onboarding uses an env SecretRef.
+const PROVIDER_ENV_FOR_CHOICE = {
+  "openrouter-api-key": "OPENROUTER_API_KEY",
+  "openai-api-key": "OPENAI_API_KEY",
+  "apiKey": "ANTHROPIC_API_KEY",
+  "gemini-api-key": "GEMINI_API_KEY",
+  "moonshot-api-key": "MOONSHOT_API_KEY",
+  "zai-api-key": "ZAI_API_KEY",
+};
 
 function buildOnboardArgs(payload) {
   const args = [
@@ -612,8 +826,10 @@ function buildOnboardArgs(payload) {
     String(INTERNAL_GATEWAY_PORT),
     "--gateway-auth",
     "token",
-    "--gateway-token",
-    OPENCLAW_GATEWAY_TOKEN,
+    // Store the gateway token as an env SecretRef, not plaintext. The env var is always set
+    // (resolveGatewayToken() exports it before any subprocess runs).
+    "--gateway-token-ref-env",
+    "OPENCLAW_GATEWAY_TOKEN",
     "--flow",
     payload.flow || "quickstart",
   ];
@@ -639,15 +855,20 @@ function buildOnboardArgs(payload) {
     };
 
     const flag = map[payload.authChoice];
+    const envName = PROVIDER_ENV_FOR_CHOICE[payload.authChoice];
+    const envValue = envName ? (payload.env ?? process.env)[envName]?.trim() : "";
 
-    // If the user picked an API-key auth choice but didn't provide a secret, fail fast.
-    // Otherwise OpenClaw may fall back to its default auth choice, which looks like the
-    // wizard "reverted" their selection.
-    if (flag && !secret) {
-      throw new Error(`Missing auth secret for authChoice=${payload.authChoice}`);
-    }
-
-    if (flag) {
+    if (flag && !secret && envValue) {
+      // Env-backed credential: onboarding stores keyRef {source:"env", id:<envName>}; the key
+      // itself never enters the config or auth-profile store.
+      args.push("--secret-input-mode", "ref", flag, envName);
+    } else if (flag && !secret) {
+      // If the user picked an API-key auth choice but didn't provide a secret, fail fast.
+      // Otherwise OpenClaw may fall back to its default auth choice, which looks like the
+      // wizard "reverted" their selection.
+      const hint = envName ? ` (paste a key, or set ${envName} in Railway Variables)` : "";
+      throw new Error(`Missing auth secret for authChoice=${payload.authChoice}${hint}`);
+    } else if (flag) {
       args.push(flag, secret);
     }
 
@@ -738,22 +959,12 @@ app.post("/setup/api/run", requireSetupAuth, async (req, res) => {
 
   // Optional setup (only after successful onboarding).
   if (ok) {
-    // Ensure gateway token is written into config so the browser UI can authenticate reliably.
-    // (We also enforce loopback bind since the wrapper proxies externally.)
-    // IMPORTANT: Set both gateway.auth.token (server-side) and gateway.remote.token (client-side)
-    // to the same value so the Control UI can connect without "token mismatch" errors.
-    await runCmd(OPENCLAW_NODE, clawArgs(["config", "set", "gateway.auth.mode", "token"]));
-    await runCmd(OPENCLAW_NODE, clawArgs(["config", "set", "gateway.auth.token", OPENCLAW_GATEWAY_TOKEN]));
-    await runCmd(OPENCLAW_NODE, clawArgs(["config", "set", "gateway.remote.token", OPENCLAW_GATEWAY_TOKEN]));
-    await runCmd(OPENCLAW_NODE, clawArgs(["config", "set", "gateway.bind", "loopback"]));
-    await runCmd(OPENCLAW_NODE, clawArgs(["config", "set", "gateway.port", String(INTERNAL_GATEWAY_PORT)]));
+    // Fresh state created by this OpenClaw version: record it so the migration gate stays quiet.
+    writeVersionMarker(await detectOpenclawVersion());
+    migrationRequired = null;
 
-    // Railway runs behind a reverse proxy. Trust loopback as a proxy hop so local client detection
-    // remains correct when X-Forwarded-* headers are present.
-    await runCmd(
-      OPENCLAW_NODE,
-      clawArgs(["config", "set", "--json", "gateway.trustedProxies", JSON.stringify(["127.0.0.1"]) ]),
-    );
+    // Gateway auth (env SecretRef), loopback bind, trusted proxy, public origin.
+    await syncGatewayConfig();
 
     // Optional: configure a custom OpenAI-compatible provider (base URL) for advanced users.
     if (payload.customProviderId?.trim() && payload.customProviderBaseUrl?.trim()) {
@@ -789,14 +1000,12 @@ app.post("/setup/api/run", requireSetupAuth, async (req, res) => {
       }
     }
 
-    const channelsHelp = await runCmd(OPENCLAW_NODE, clawArgs(["channels", "add", "--help"]));
-    const helpText = channelsHelp.output || "";
-
-    const supports = (name) => helpText.includes(name);
+    const channels = await detectChannelPlugins();
+    const supports = (name) => Boolean(channels[name]);
 
     if (payload.telegramToken?.trim()) {
       if (!supports("telegram")) {
-        extra += "\n[telegram] skipped (this openclaw build does not list telegram in `channels add --help`)\n";
+        extra += "\n[telegram] skipped (telegram plugin is not installed in this openclaw build; it is no longer bundled)\n";
       } else {
         // Avoid `channels add` here (it has proven flaky across builds); write config directly.
         const token = payload.telegramToken.trim();
@@ -816,32 +1025,29 @@ app.post("/setup/api/run", requireSetupAuth, async (req, res) => {
         // Best-effort: enable the telegram plugin explicitly (some builds require this even when configured).
         const plug = await runCmd(OPENCLAW_NODE, clawArgs(["plugins", "enable", "telegram"]));
 
-        extra += `\n[telegram config] exit=${set.code} (output ${set.output.length} chars)\n${set.output || "(no output)"}`;
-        extra += `\n[telegram verify] exit=${get.code} (output ${get.output.length} chars)\n${get.output || "(no output)"}`;
-        extra += `\n[telegram plugin enable] exit=${plug.code} (output ${plug.output.length} chars)\n${plug.output || "(no output)"}`;
+        extra += `\n[telegram config] exit=${set.code} (output ${set.output.length} chars)\n${redactSecrets(set.output) || "(no output)"}`;
+        extra += `\n[telegram verify] exit=${get.code} (output ${get.output.length} chars)\n${redactSecrets(get.output) || "(no output)"}`;
+        extra += `\n[telegram plugin enable] exit=${plug.code} (output ${plug.output.length} chars)\n${redactSecrets(plug.output) || "(no output)"}`;
       }
     }
 
-    if (payload.discordToken?.trim()) {
+    const discordFormToken = payload.discordToken?.trim() || "";
+    const discordEnvToken = Boolean(process.env.DISCORD_BOT_TOKEN?.trim());
+    if (discordFormToken || discordEnvToken) {
       if (!supports("discord")) {
-        extra += "\n[discord] skipped (this openclaw build does not list discord in `channels add --help`)\n";
+        extra += "\n[discord] skipped (discord plugin not found in `openclaw plugins list`)\n";
       } else {
-        const token = payload.discordToken.trim();
-        const cfgObj = {
-          enabled: true,
-          token,
-          groupPolicy: "allowlist",
-          dm: {
-            policy: "pairing",
-          },
-        };
+        // Current schema: top-level dmPolicy/groupPolicy. When DISCORD_BOT_TOKEN is set in the
+        // environment, omit `token` entirely; the plugin reads the env var for the default account.
+        const cfgObj = buildDiscordConfig({ token: discordFormToken, envToken: discordEnvToken });
         const set = await runCmd(
           OPENCLAW_NODE,
-          clawArgs(["config", "set", "--json", "channels.discord", JSON.stringify(cfgObj)]),
+          clawArgs(["config", "set", "--strict-json", "channels.discord", JSON.stringify(cfgObj)]),
         );
         const get = await runCmd(OPENCLAW_NODE, clawArgs(["config", "get", "channels.discord"]));
-        extra += `\n[discord config] exit=${set.code} (output ${set.output.length} chars)\n${set.output || "(no output)"}`;
-        extra += `\n[discord verify] exit=${get.code} (output ${get.output.length} chars)\n${get.output || "(no output)"}`;
+        const source = discordFormToken ? "token from form" : "token from DISCORD_BOT_TOKEN env";
+        extra += `\n[discord config] (${source}) exit=${set.code} (output ${set.output.length} chars)\n${redactSecrets(set.output) || "(no output)"}`;
+        extra += `\n[discord verify] exit=${get.code} (output ${get.output.length} chars)\n${redactSecrets(get.output) || "(no output)"}`;
       }
     }
 
@@ -859,8 +1065,8 @@ app.post("/setup/api/run", requireSetupAuth, async (req, res) => {
           clawArgs(["config", "set", "--json", "channels.slack", JSON.stringify(cfgObj)]),
         );
         const get = await runCmd(OPENCLAW_NODE, clawArgs(["config", "get", "channels.slack"]));
-        extra += `\n[slack config] exit=${set.code} (output ${set.output.length} chars)\n${set.output || "(no output)"}`;
-        extra += `\n[slack verify] exit=${get.code} (output ${get.output.length} chars)\n${get.output || "(no output)"}`;
+        extra += `\n[slack config] exit=${set.code} (output ${set.output.length} chars)\n${redactSecrets(set.output) || "(no output)"}`;
+        extra += `\n[slack verify] exit=${get.code} (output ${get.output.length} chars)\n${redactSecrets(get.output) || "(no output)"}`;
       }
     }
 
@@ -868,9 +1074,9 @@ app.post("/setup/api/run", requireSetupAuth, async (req, res) => {
     await restartGateway();
 
     // Ensure OpenClaw applies any "configured but not enabled" channel/plugin changes.
-    // This makes Telegram/Discord pairing issues much less "silent".
-    const fix = await runCmd(OPENCLAW_NODE, clawArgs(["doctor", "--fix"]));
-    extra += `\n[doctor --fix] exit=${fix.code} (output ${fix.output.length} chars)\n${fix.output || "(no output)"}`;
+    // This makes Telegram/Discord pairing issues much less "silent". Fresh state only (just onboarded).
+    const fix = await runCmd(OPENCLAW_NODE, clawArgs(["doctor", "--fix", "--non-interactive"]));
+    extra += `\n[doctor --fix] exit=${fix.code} (output ${fix.output.length} chars)\n${redactSecrets(fix.output) || "(no output)"}`;
 
     // Doctor may require a restart depending on changes.
     await restartGateway();
@@ -878,7 +1084,7 @@ app.post("/setup/api/run", requireSetupAuth, async (req, res) => {
 
   return respondJson(ok ? 200 : 500, {
     ok,
-    output: `${prefix}${onboard.output}${extra}`,
+    output: `${prefix}${redactSecrets(onboard.output)}${extra}`,
   });
   } catch (err) {
     console.error("[/setup/api/run] error:", err);
@@ -888,7 +1094,7 @@ app.post("/setup/api/run", requireSetupAuth, async (req, res) => {
 
 app.get("/setup/api/debug", requireSetupAuth, async (_req, res) => {
   const v = await runCmd(OPENCLAW_NODE, clawArgs(["--version"]));
-  const help = await runCmd(OPENCLAW_NODE, clawArgs(["channels", "add", "--help"]));
+  const channels = await detectChannelPlugins();
 
   // Channel config checks (redact secrets before returning to client)
   const tg = await runCmd(OPENCLAW_NODE, clawArgs(["config", "get", "channels.telegram"]));
@@ -913,6 +1119,11 @@ app.get("/setup/api/debug", requireSetupAuth, async (_req, res) => {
       gatewayRunning: Boolean(gatewayProc),
       gatewayTokenFromEnv: Boolean(process.env.OPENCLAW_GATEWAY_TOKEN?.trim()),
       gatewayTokenPersisted: fs.existsSync(path.join(STATE_DIR, "gateway.token")),
+      publicOrigin: PUBLIC_ORIGIN || null,
+      listenHost: HOST,
+      migrationGateEnabled: MIGRATION_GATE_ENABLED,
+      migrationRequired,
+      versionMarker: readVersionMarker(),
       lastGatewayError,
       lastGatewayExit,
       lastDoctorAt,
@@ -923,7 +1134,7 @@ app.get("/setup/api/debug", requireSetupAuth, async (_req, res) => {
       entry: OPENCLAW_ENTRY,
       node: OPENCLAW_NODE,
       version: v.output.trim(),
-      channelsAddHelpIncludesTelegram: help.output.includes("telegram"),
+      channelPlugins: channels,
       channels: {
         telegram: {
           exit: tg.code,
@@ -946,14 +1157,34 @@ app.get("/setup/api/debug", requireSetupAuth, async (_req, res) => {
 
 function redactSecrets(text) {
   if (!text) return text;
-  // Very small best-effort redaction. (Config paths/values may still contain secrets.)
+  // Best-effort redaction of well-known secret shapes. (Config paths/values may still contain secrets.)
   return String(text)
     .replace(/(sk-[A-Za-z0-9_-]{10,})/g, "[REDACTED]")
     .replace(/(gho_[A-Za-z0-9_]{10,})/g, "[REDACTED]")
     .replace(/(xox[baprs]-[A-Za-z0-9-]{10,})/g, "[REDACTED]")
+    // Discord bot tokens: <base64 id>.<6 chars>.<27+ chars>
+    .replace(/\b([A-Za-z0-9_-]{23,}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27,})\b/g, "[REDACTED]")
     // Telegram bot tokens look like: 123456:ABCDEF...
     .replace(/(\d{5,}:[A-Za-z0-9_-]{10,})/g, "[REDACTED]")
-    .replace(/(AA[A-Za-z0-9_-]{10,}:\S{10,})/g, "[REDACTED]");
+    .replace(/(AA[A-Za-z0-9_-]{10,}:\S{10,})/g, "[REDACTED]")
+    // Wrapper-generated gateway tokens are 32 random bytes as hex.
+    .replace(/\b[a-f0-9]{64}\b/g, "[REDACTED]")
+    // Generic quoted secret-bearing keys in JSON/JSON5 output: "token": "..." etc.
+    .replace(/(["']?(?:token|botToken|appToken|apiKey|api_key|password|secret)["']?\s*[:=]\s*["'])([^"'\s]{8,})(["'])/gi, "$1[REDACTED]$3");
+}
+
+// Build the channels.discord config object for the current schema.
+// - dmPolicy/groupPolicy are top-level (the old nested dm.policy shape is legacy).
+// - When the token comes from DISCORD_BOT_TOKEN, omit `token` so the config never holds it.
+function buildDiscordConfig({ token, envToken }) {
+  const cfg = {
+    enabled: true,
+    dmPolicy: "pairing",
+    groupPolicy: "allowlist",
+  };
+  if (token) cfg.token = token;
+  else if (!envToken) throw new Error("Discord: no token provided and DISCORD_BOT_TOKEN is not set");
+  return cfg;
 }
 
 function extractDeviceRequestIds(text) {
@@ -977,6 +1208,8 @@ const ALLOWED_CONSOLE_COMMANDS = new Set([
   "openclaw.status",
   "openclaw.health",
   "openclaw.doctor",
+  "openclaw.doctor.fix",
+  "migration.acknowledge",
   "openclaw.logs.tail",
   "openclaw.config.get",
 
@@ -1004,11 +1237,7 @@ app.post("/setup/api/console/run", requireSetupAuth, async (req, res) => {
       return res.json({ ok: true, output: "Gateway restarted (wrapper-managed).\n" });
     }
     if (cmd === "gateway.stop") {
-      if (gatewayProc) {
-        try { gatewayProc.kill("SIGTERM"); } catch {}
-        await sleep(750);
-        gatewayProc = null;
-      }
+      await stopGateway();
       return res.json({ ok: true, output: "Gateway stopped (wrapper-managed).\n" });
     }
     if (cmd === "gateway.start") {
@@ -1032,9 +1261,32 @@ app.post("/setup/api/console/run", requireSetupAuth, async (req, res) => {
       const r = await runCmd(OPENCLAW_NODE, clawArgs(["doctor"]));
       return res.status(r.code === 0 ? 200 : 500).json({ ok: r.code === 0, output: redactSecrets(r.output) });
     }
+    if (cmd === "openclaw.doctor.fix") {
+      // Operator-run migration/repair. Mutates persistent state; the UI tells users to back up first.
+      await stopGateway();
+      const r = await runMigrationDoctorFix();
+      if (!r.ok) return res.status(500).json({ ok: false, output: r.output });
+      await completeMigration();
+      let started = "";
+      try {
+        await ensureGatewayRunning();
+        started = "\nMigration recorded; gateway started.\n";
+      } catch (err) {
+        started = `\nMigration recorded, but the gateway failed to start: ${String(err)}\n`;
+      }
+      return res.json({ ok: true, output: `${r.output}${started}` });
+    }
+    if (cmd === "migration.acknowledge") {
+      if (!migrationRequired) {
+        return res.json({ ok: true, output: "No migration pending.\n" });
+      }
+      await completeMigration();
+      const started = await ensureGatewayRunning().then(() => "gateway started", (e) => `gateway failed to start: ${String(e)}`);
+      return res.json({ ok: true, output: `Recorded current OpenClaw version as migrated; ${started}.\n` });
+    }
     if (cmd === "openclaw.logs.tail") {
       const lines = Math.max(50, Math.min(1000, Number.parseInt(arg || "200", 10) || 200));
-      const r = await runCmd(OPENCLAW_NODE, clawArgs(["logs", "--tail", String(lines)]));
+      const r = await runCmd(OPENCLAW_NODE, clawArgs(["logs", "--limit", String(lines)]));
       return res.status(r.code === 0 ? 200 : 500).json({ ok: r.code === 0, output: redactSecrets(r.output) });
     }
     if (cmd === "openclaw.config.get") {
@@ -1150,11 +1402,7 @@ app.post("/setup/api/reset", requireSetupAuth, async (_req, res) => {
   try {
     // Stop gateway to avoid running gateway + onboard concurrently on small Railway instances.
     try {
-      if (gatewayProc) {
-        try { gatewayProc.kill("SIGTERM"); } catch {}
-        await sleep(750);
-        gatewayProc = null;
-      }
+      await stopGateway();
     } catch {
       // ignore
     }
@@ -1200,6 +1448,8 @@ app.get("/setup/export", requireSetupAuth, async (_req, res) => {
     ];
   }
 
+  // NOTE: the archive contains secrets (openclaw.json, credentials/, auth profiles, sessions).
+  // Log files are excluded; they are large and not needed for restore.
   const stream = tar.c(
     {
       gzip: true,
@@ -1207,6 +1457,7 @@ app.get("/setup/export", requireSetupAuth, async (_req, res) => {
       noMtime: true,
       cwd,
       onwarn: () => {},
+      filter: (p) => !isExcludedFromBackup(p),
     },
     paths,
   );
@@ -1219,6 +1470,13 @@ app.get("/setup/export", requireSetupAuth, async (_req, res) => {
 
   stream.pipe(res);
 });
+
+// Paths (relative to the archive root) skipped by /setup/export.
+function isExcludedFromBackup(p) {
+  const parts = String(p || "").split("/").filter(Boolean);
+  // .openclaw/logs/** or workspace/logs/** style directories.
+  return parts.length >= 2 && parts[1] === "logs";
+}
 
 function isUnderDir(p, root) {
   const abs = path.resolve(p);
@@ -1268,11 +1526,7 @@ app.post("/setup/import", requireSetupAuth, async (req, res) => {
     }
 
     // Stop gateway before restore so we don't overwrite live files.
-    if (gatewayProc) {
-      try { gatewayProc.kill("SIGTERM"); } catch {}
-      await sleep(750);
-      gatewayProc = null;
-    }
+    await stopGateway();
 
     const buf = await readBodyBuffer(req, 250 * 1024 * 1024); // 250MB max
     if (!buf.length) return res.status(400).type("text/plain").send("Empty body\n");
@@ -1296,6 +1550,13 @@ app.post("/setup/import", requireSetupAuth, async (req, res) => {
     });
 
     try { fs.rmSync(tmpPath, { force: true }); } catch {}
+
+    // A restored backup may come from a different OpenClaw version: re-evaluate the migration gate.
+    await checkMigrationGate();
+    if (migrationRequired) {
+      res.type("text/plain").send(`OK - imported backup into /data.\nGateway NOT started:\n${migrationInstructions()}\n`);
+      return;
+    }
 
     // Restart gateway after restore.
     if (isConfigured()) {
@@ -1372,6 +1633,9 @@ app.use(requireDashboardAuth, async (req, res) => {
   }
 
   if (isConfigured()) {
+    if (migrationRequired) {
+      return res.status(503).type("text/plain").send(`Gateway not started: migration required.\n\n${migrationInstructions()}\n`);
+    }
     try {
       await ensureGatewayRunning();
     } catch (err) {
@@ -1391,8 +1655,8 @@ app.use(requireDashboardAuth, async (req, res) => {
   return proxy.web(req, res, { target: GATEWAY_TARGET });
 });
 
-const server = app.listen(PORT, "0.0.0.0", async () => {
-  console.log(`[wrapper] listening on :${PORT}`);
+const server = app.listen(PORT, HOST, async () => {
+  console.log(`[wrapper] listening on [${HOST}]:${PORT}`);
   console.log(`[wrapper] state dir: ${STATE_DIR}`);
   console.log(`[wrapper] workspace dir: ${WORKSPACE_DIR}`);
 
@@ -1431,24 +1695,31 @@ const server = app.listen(PORT, "0.0.0.0", async () => {
     }
   }
 
-  // Sync gateway tokens in config with the current env var on every startup.
-  // This prevents "gateway token mismatch" when OPENCLAW_GATEWAY_TOKEN changes
-  // (e.g. Railway variable update) but the config file still has the old value.
-  if (isConfigured() && OPENCLAW_GATEWAY_TOKEN) {
-    console.log("[wrapper] syncing gateway tokens in config...");
+  // Migration gate: never start the gateway against state last touched by a different OpenClaw
+  // version. Normal startup does not mutate persistent state; the operator runs doctor from /setup.
+  await checkMigrationGate();
+  if (migrationRequired) {
+    console.error(`[wrapper] MIGRATION REQUIRED\n${migrationInstructions()}`);
+  }
+
+  // Legacy plaintext gateway token in config (e.g. state written by an older wrapper): replace it
+  // with an env SecretRef. Skipped when the config already references the env var, so a normal
+  // boot leaves the config untouched.
+  if (isConfigured() && !migrationRequired && OPENCLAW_GATEWAY_TOKEN) {
     try {
-      await runCmd(OPENCLAW_NODE, clawArgs(["config", "set", "gateway.auth.mode", "token"]));
-      await runCmd(OPENCLAW_NODE, clawArgs(["config", "set", "gateway.auth.token", OPENCLAW_GATEWAY_TOKEN]));
-      await runCmd(OPENCLAW_NODE, clawArgs(["config", "set", "gateway.remote.token", OPENCLAW_GATEWAY_TOKEN]));
-      console.log("[wrapper] gateway tokens synced");
+      if (!(await gatewayTokenIsRef())) {
+        console.log("[wrapper] gateway.auth.token is not an env reference; rewriting as SecretRef...");
+        await syncGatewayConfig();
+        console.log("[wrapper] gateway config synced");
+      }
     } catch (err) {
-      console.warn(`[wrapper] failed to sync gateway tokens: ${String(err)}`);
+      console.warn(`[wrapper] failed to sync gateway config: ${String(err)}`);
     }
   }
 
-  // Auto-start the gateway if already configured so polling channels (Telegram/Discord/etc.)
+  // Auto-start the gateway if already configured so polling channels (Discord/etc.)
   // work even if nobody visits the web UI.
-  if (isConfigured()) {
+  if (isConfigured() && !migrationRequired) {
     console.log("[wrapper] config detected; starting gateway...");
     try {
       await ensureGatewayRunning();
@@ -1478,20 +1749,30 @@ server.on("upgrade", async (req, socket, head) => {
   proxy.ws(req, socket, head, { target: GATEWAY_TARGET });
 });
 
-process.on("SIGTERM", () => {
-  // Best-effort shutdown
+let shuttingDown = false;
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[wrapper] ${signal} received; stopping gateway...`);
+
+  // Hard deadline in case the gateway ignores SIGTERM/SIGKILL handling stalls.
+  setTimeout(() => process.exit(0), 12_000).unref?.();
+
+  // Stop accepting new connections (in-flight requests may finish while the gateway stops).
   try {
-    if (gatewayProc) gatewayProc.kill("SIGTERM");
+    server.close();
   } catch {
     // ignore
   }
 
-  // Stop accepting new connections; allow in-flight requests to complete briefly.
+  // Wait for the gateway to exit so SQLite/state files are closed cleanly.
   try {
-    server.close(() => process.exit(0));
+    await stopGateway(8_000);
   } catch {
-    process.exit(0);
+    // ignore
   }
+  process.exit(0);
+}
 
-  setTimeout(() => process.exit(0), 5_000).unref?.();
-});
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

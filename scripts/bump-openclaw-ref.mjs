@@ -23,25 +23,26 @@ async function gh(path) {
   return res.json();
 }
 
+// The Dockerfile pins the official image tag (no leading "v"), e.g. ARG OPENCLAW_VERSION=2026.9.5
 function readCurrentTag(dockerfile) {
-  const m = dockerfile.match(/\nARG OPENCLAW_GIT_REF=([^\n]+)\n/);
+  const m = dockerfile.match(/\nARG OPENCLAW_VERSION=([^\n]+)\n/);
   return m ? m[1].trim() : null;
 }
 
 function replaceTag(dockerfile, next) {
-  const re = /\nARG OPENCLAW_GIT_REF=([^\n]+)\n/;
-  if (!re.test(dockerfile)) throw new Error("Could not find OPENCLAW_GIT_REF line");
-  return dockerfile.replace(re, `\nARG OPENCLAW_GIT_REF=${next}\n`);
+  const re = /\nARG OPENCLAW_VERSION=([^\n]+)\n/;
+  if (!re.test(dockerfile)) throw new Error("Could not find OPENCLAW_VERSION line");
+  return dockerfile.replace(re, `\nARG OPENCLAW_VERSION=${next}\n`);
 }
 
 const latest = await gh(`/repos/${owner}/${repo}/releases/latest`);
-const latestTag = latest.tag_name;
+const latestTag = latest.tag_name?.replace(/^v/, "");
 if (!latestTag) throw new Error("No tag_name in latest release response");
 
 const dockerPath = "Dockerfile";
 const docker = fs.readFileSync(dockerPath, "utf8");
 const currentTag = readCurrentTag(docker);
-if (!currentTag) throw new Error("Could not parse current OPENCLAW_GIT_REF");
+if (!currentTag) throw new Error("Could not parse current OPENCLAW_VERSION");
 
 console.log(`current=${currentTag} latest=${latestTag}`);
 

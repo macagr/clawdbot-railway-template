@@ -7,5 +7,7 @@ test("reset handler stops gateway before deleting config", () => {
   const idx = src.indexOf('app.post("/setup/api/reset"');
   assert.ok(idx >= 0);
   const window = src.slice(idx, idx + 900);
-  assert.match(window, /gatewayProc\.kill\("SIGTERM"\)/);
+  // stopGateway() sends SIGTERM and waits for the child to exit before config is deleted.
+  assert.match(window, /await stopGateway\(\)/);
+  assert.ok(window.indexOf("await stopGateway()") < window.indexOf("fs.rmSync"));
 });

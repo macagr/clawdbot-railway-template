@@ -115,13 +115,25 @@
       if (statusDetailsEl) {
         var parts = [];
         parts.push('Gateway target: ' + (j.gatewayTarget || '(unknown)'));
+        if (j.envDetected) {
+          if (j.envDetected.openrouter) parts.push('OPENROUTER_API_KEY detected in env (leave the key field blank to use it).');
+          if (j.envDetected.discord) parts.push('DISCORD_BOT_TOKEN detected in env (leave the Discord token blank to use it).');
+          if (!j.envDetected.publicOrigin) parts.push('OPENCLAW_PUBLIC_ORIGIN is not set; the Control UI websocket may be rejected behind a proxy.');
+        }
         parts.push('Tip: /healthz shows wrapper+gateway reachability.');
         statusDetailsEl.textContent = parts.join('\n');
       }
 
-      // If channels are unsupported, surface it for debugging.
-      if (j.channelsAddHelp && j.channelsAddHelp.indexOf('telegram') === -1) {
-        logEl.textContent += '\nNote: this openclaw build does not list telegram in `channels add --help`. Telegram auto-add will be skipped.\n';
+      renderMigration(j.migration);
+
+      // If channel plugins are missing, surface it for debugging.
+      if (j.channels && !j.channels.probeFailed) {
+        if (!j.channels.telegram) {
+          logEl.textContent += '\nNote: the telegram plugin is not installed in this openclaw build (no longer bundled). Telegram auto-add will be skipped.\n';
+        }
+        if (!j.channels.discord) {
+          logEl.textContent += '\nWARNING: the discord plugin was not found in `openclaw plugins list`. Discord auto-add will be skipped.\n';
+        }
       }
 
       // Attempt to load config editor content if present.
@@ -133,6 +145,49 @@
       setStatus('Error: ' + String(e));
       if (statusDetailsEl) statusDetailsEl.textContent = '';
     });
+  }
+
+  // Migration banner (shown when the OpenClaw version changed since the state dir was last used).
+  var migrationEl = document.getElementById('migration');
+  var migrationTextEl = document.getElementById('migrationText');
+  var migrationOutEl = document.getElementById('migrationOut');
+  var migrationDoctorEl = document.getElementById('migrationDoctor');
+  var migrationAckEl = document.getElementById('migrationAck');
+
+  function renderMigration(m) {
+    if (!migrationEl) return;
+    if (!m || !m.required) {
+      migrationEl.style.display = 'none';
+      return;
+    }
+    migrationEl.style.display = 'block';
+    if (migrationTextEl) migrationTextEl.textContent = m.instructions || ('Version changed: ' + m.from + ' -> ' + m.to);
+  }
+
+  function runMigrationCommand(cmd, confirmText) {
+    if (!confirm(confirmText)) return;
+    if (migrationOutEl) migrationOutEl.textContent = 'Running ' + cmd + '... (this can take a few minutes)\n';
+    return httpJson('/setup/api/console/run', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ cmd: cmd, arg: '' })
+    }).then(function (j) {
+      if (migrationOutEl) migrationOutEl.textContent = (j.output || JSON.stringify(j, null, 2));
+      return refreshStatus();
+    }).catch(function (e) {
+      if (migrationOutEl) migrationOutEl.textContent += '\nError: ' + String(e) + '\n';
+    });
+  }
+
+  if (migrationDoctorEl) {
+    migrationDoctorEl.onclick = function () {
+      runMigrationCommand('openclaw.doctor.fix', 'Run `openclaw doctor --fix`? This migrates the persisted state in /data. Make sure you downloaded a backup first.');
+    };
+  }
+  if (migrationAckEl) {
+    migrationAckEl.onclick = function () {
+      runMigrationCommand('migration.acknowledge', 'Record the current OpenClaw version as migrated WITHOUT running doctor? Only do this if you already ran `openclaw doctor --fix` against this state.');
+    };
   }
 
   // Fast auth group load (no subprocesses). Keeps selects from appearing empty.
