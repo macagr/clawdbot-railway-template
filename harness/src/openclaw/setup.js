@@ -79,7 +79,8 @@ export const ALLOWED_CONFIG_KEY_PATTERNS = [
 export function approvalOps(cfg) {
   return (cfg.approvals || []).map(({ agentId, pattern }) => ({
     agentId, pattern,
-    args: ["approvals", "allowlist", "add", "--gateway", "--agent", agentId, "--pattern", pattern],
+    // Pattern is positional in `openclaw approvals allowlist add`; --agent scopes it to the coordinator.
+    args: ["approvals", "allowlist", "add", "--gateway", "--agent", agentId, pattern],
   }));
 }
 

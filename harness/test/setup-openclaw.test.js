@@ -54,7 +54,7 @@ test("approvals: narrow path-only allowlist entry for the coordinator via the ap
     const cfg = openclawConfigFor(r.store, { rpBin: "/opt/rp-harness/bin/rp" });
     const ops = approvalOps(cfg);
     assert.equal(ops.length, 1);
-    assert.deepEqual(ops[0].args, ["approvals", "allowlist", "add", "--gateway", "--agent", "campaign_fixture", "--pattern", "/opt/rp-harness/bin/rp"]);
+    assert.deepEqual(ops[0].args, ["approvals", "allowlist", "add", "--gateway", "--agent", "campaign_fixture", "/opt/rp-harness/bin/rp"], "pattern is positional; there is no --pattern flag");
     assert.ok(!ops[0].args.includes("*"), "no wildcard patterns");
   } finally { r.cleanup(); }
 });
@@ -81,7 +81,7 @@ test("applyConfig: dry run prints config and approval commands; config failure a
     assert.equal(dry.length + dry.approvals.length, lines.length);
     assert.match(lines[0], /^openclaw config set --strict-json agents\.entries\.campaign_fixture /);
     assert.ok(lines.includes("openclaw config unset tools.exec.security"));
-    assert.match(lines.at(-1), /^openclaw approvals allowlist add --gateway --agent campaign_fixture --pattern \/opt\/rp-harness\/bin\/rp$/);
+    assert.match(lines.at(-1), /^openclaw approvals allowlist add --gateway --agent campaign_fixture \/opt\/rp-harness\/bin\/rp$/);
     const calls = [];
     const run = async (bin, args) => { calls.push(args); return { code: args[3]?.endsWith?.("memory.enabled") ? 1 : 0, output: "" }; };
     const ok = await applyConfig(cfg, { run });
@@ -92,7 +92,7 @@ test("applyConfig: dry run prints config and approval commands; config failure a
     const approvalFails = async (bin, args) => (args[0] === "approvals" ? { code: 1, output: "unknown command" } : { code: 0, output: "" });
     const res = await applyConfig(cfg, { run: approvalFails });
     assert.equal(res.instructions.length, 1);
-    assert.match(res.instructions[0], /Run manually:\n  openclaw approvals allowlist add --gateway --agent campaign_fixture --pattern \/opt\/rp-harness\/bin\/rp/);
+    assert.match(res.instructions[0], /Run manually:\n  openclaw approvals allowlist add --gateway --agent campaign_fixture \/opt\/rp-harness\/bin\/rp/);
     assert.ok(!calls.some((a) => a.includes("full")), "never broadens exec");
   } finally { r.cleanup(); }
 });
