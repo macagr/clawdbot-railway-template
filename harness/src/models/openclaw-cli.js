@@ -30,18 +30,17 @@ export class OpenClawCliAdapter {
       const data = parseJsonEnvelope(stdout);
       const text = extractReplyText(data);
       if (!text) throw new ModelError("openclaw agent returned no reply text", { code: "empty", retryable: true });
-      const u = data.usage || data.meta?.usage || {};
-      return {
-        text,
-        usage: {
-          input_tokens: num(u.input ?? u.input_tokens ?? u.inputTokens ?? u.prompt_tokens),
-          output_tokens: num(u.output ?? u.output_tokens ?? u.outputTokens ?? u.completion_tokens),
-          cached_tokens: num(u.cached ?? u.cached_tokens ?? u.cacheRead ?? 0),
-        },
-        model: data.model || model || agentId,
-        provider: "openclaw",
-        cost_reported: typeof data.costUsd === "number" ? data.costUsd : undefined,
+      const u = data.usage || data.meta?.usage || data.result?.usage || {};
+      const usage = {
+        input_tokens: num(u.input ?? u.input_tokens ?? u.inputTokens ?? u.prompt_tokens ?? u.promptTokens),
+        output_tokens: num(u.output ?? u.output_tokens ?? u.outputTokens ?? u.completion_tokens ?? u.completionTokens),
+        cached_tokens: num(u.cached ?? u.cached_tokens ?? u.cacheRead ?? u.cache_read_input_tokens ?? 0),
       };
+      const cost = [data.costUsd, data.meta?.costUsd, data.result?.costUsd, u.costUsd].find((c) => typeof c === "number");
+      if (usage.input_tokens === 0 && usage.output_tokens === 0) {
+        this.log?.debug?.(`[openclaw-cli] no usage found in envelope; top-level keys: ${Object.keys(data).join(", ")}${data.meta ? `; meta keys: ${Object.keys(data.meta).join(", ")}` : ""}`);
+      }
+      return { text, usage, model: data.model || model || agentId, provider: "openclaw", cost_reported: cost };
     } finally {
       try { fs.rmSync(file, { force: true }); } catch {}
     }

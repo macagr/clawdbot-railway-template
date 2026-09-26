@@ -17,6 +17,36 @@ Prescribe the shape of this turn in `form` using only the values listed under Fo
 
 ## Output
 
-Return ONLY a JSON object matching the Director packet schema. Required: `turn_summary`, `form`, `scene`, `perception`, `npc_intents`, `reveals_allowed`, `reveals_forbidden`, `stop_for_player`. Keep `perception` to what `{{pc_id}}` can see, hear and plausibly infer now. `reveals_forbidden` lists fact ids that must not surface in prose this turn. For each NPC intent give `intent`, `acting_on`, `emotional_register`, `speech_acts` (each with `act` and, where useful, `subtext` to be delivered but never named), and `must_not_reveal`. Mark `speaks: false` for NPCs who are present but silent. List in `npc_decision_requests` any NPC whose consequential decision should be made by a fresh NPC call rather than by you.
+Return ONLY a JSON object with exactly this shape (no extra keys anywhere; omit optional keys you do not need):
 
-Do not include prose, markdown, or commentary outside the JSON object.
+```
+{
+  "turn_summary": "one line",
+  "presentation_suggestion": "<presentation mode id, optional>",
+  "form": { "length_band": "…", "structure": "…", "camera": "…", "tempo": "…", "ending": "…", "sense": "…" },
+  "scene": { "location": "<location id>", "time": "display time, optional", "present": ["<actor ids>"], "beats": ["2-6 short beats"] },
+  "perception": "what {{pc_id}} can see, hear and plausibly infer now",
+  "fact_proposals": [ { "ref": "new:<slug>", "content": "…", "truth_status": "true|false|unresolved|disputed", "authorial": "decided|undecided", "visibility": "public|restricted|gm_only", "tags": [], "aliases": ["short label"] } ],
+  "npc_intents": [ { "npc": "<npc id>", "intent": "…", "acting_on": ["<fact ids from that NPC's permitted view>"], "emotional_register": "…",
+                     "speech_acts": [ { "act": "…", "subtext": "delivered, never named" } ], "must_not_reveal": ["<fact ids>"], "speaks": true } ],
+  "npc_decision_requests": ["<npc ids whose consequential decision a fresh NPC call should make>"],
+  "knowledge_events": [ { "kind": "transmit|observe|infer|forge", "fact": "<fact id or new:ref>", "from": { "type": "actor", "id": "…" } | null,
+                          "to": { "type": "actor", "id": "…" }, "channel": "<channel id>", "delay": 0, "fidelity": "accurate|partial|distorted|false", "variant": "…", "succeeded": true, "believed": true, "confidence": "low|medium|high" } ],
+  "resolution_events": [ { "fact": "<fact id>", "to_status": "true|false|unresolved|disputed", "visibility": "…", "candidate": "<candidate id, optional>", "cause": "…" } ],
+  "candidate_updates": [ { "op": "propose", "fact": "<fact id>", "proposal": "…", "proposed_status": "…" }, { "op": "abandon", "id": "<candidate id>" } ],
+  "reveals_allowed": ["<fact ids that may surface>"],
+  "reveals_forbidden": ["<fact ids that must not surface>"],
+  "uncertainty": ["things deliberately left open"],
+  "consequences": [ { "type": "<id>", "actor": "<id>", "description": "…" } ],
+  "state_deltas": { "scene": { "location": "…", "time": "…", "clock_advance": 0, "present": [], "active_plots": [], "summary": "…", "scene_end": false },
+                    "relationships": [ { "from": "<id>", "to": "<id>", "stance": "…", "trust": "low|medium|high", "history_add": "…" } ],
+                    "unresolved": [ { "op": "add|resolve|drop", "id": "…", "question": "…", "actors": [] } ],
+                    "actors": [ { "op": "appearance|promote|retire", "id": "<id>", "tier": "…" }, { "op": "cast", "casting_request": { "ref": "new:<slug>", "role": "…", "returning": false, "constraints": {} } } ] },
+  "mind_deltas": [ { "actor": "<npc id>", "intentions_add": [], "intentions_update": [], "suspicions_add": [], "interpretations_add": [], "dispositions": {} } ],
+  "stop_for_player": true,
+  "stop_reason": "why the player must act now",
+  "novelist_notes": "…"
+}
+```
+
+Required: `turn_summary`, `form`, `scene` (with `beats`), `perception`, `npc_intents`, `reveals_allowed`, `reveals_forbidden`, `stop_for_player`. Do not copy the scene state object from the context into `scene`; give only `location`, `time`, `present`, `beats`. Do not include prose, markdown, or commentary outside the JSON object.

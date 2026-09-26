@@ -10,6 +10,24 @@ const NEW_REF = /^new:[a-z0-9_-]{1,40}$/;
 
 export function isNewRef(ref) { return NEW_REF.test(ref || ""); }
 
+// Fields models tend to echo from the context into packet.scene. Code owns all of them, so they
+// are dropped before schema validation instead of failing the turn. Everything else stays strict.
+const SCENE_ECHO_KEYS = ["scene_id", "clock", "mode", "presentation", "presentation_forced", "active_plots", "summary", "extensions", "present_detail"];
+
+export function normalizeDirectorPacket(packet) {
+  if (!packet || typeof packet !== "object") return packet;
+  const out = { ...packet };
+  if (out.scene && typeof out.scene === "object") {
+    const scene = { ...out.scene };
+    for (const k of SCENE_ECHO_KEYS) delete scene[k];
+    if (!Array.isArray(scene.beats)) scene.beats = [];
+    out.scene = scene;
+  }
+  for (const k of ["reveals_allowed", "reveals_forbidden", "npc_intents"]) if (out[k] == null) out[k] = [];
+  if (typeof out.stop_for_player !== "boolean") out.stop_for_player = Boolean(out.stop_for_player);
+  return out;
+}
+
 export function validateDirectorPacket(packet, { facts, actors, catalog, manifest, scene }) {
   const errors = [], warnings = [];
   const E = (code, msg) => errors.push({ code, msg });

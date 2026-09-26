@@ -84,7 +84,7 @@ export class RoleCaller {
     return { rc, ...r, settings: { ...r.settings, ...pick(rc, ["temperature", "reasoning", "max_tokens", "timeout_ms"]) } };
   }
 
-  async call(role, { system, user, schema, sessionKey, agentId, turn, allowFallback = true, jsonRetries = 1 }) {
+  async call(role, { system, user, schema, sessionKey, agentId, turn, allowFallback = true, jsonRetries = 1, normalize }) {
     const primary = this.resolve(role);
     const attempts = [primary];
     if (allowFallback && primary.rc.fallback) attempts.push(this.resolve(role, primary.rc.fallback));
@@ -102,7 +102,8 @@ export class RoleCaller {
           });
           this.onUsage({ role, model: `${target.provider}/${target.model}`, usage: res.usage, turn, cost_reported: res.cost_reported });
           if (!schema) return { ...res, role };
-          const json = res.json ?? extractJson(res.text);
+          let json = res.json ?? extractJson(res.text);
+          if (normalize) json = normalize(json);
           const errs = schemas.errors(schema, json);
           if (errs.length) throw new ModelError(`${schema} validation: ${errs.slice(0, 6).join("; ")}`, { code: "schema", retryable: true, cause: errs });
           return { ...res, json, role };

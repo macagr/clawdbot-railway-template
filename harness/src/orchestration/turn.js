@@ -4,7 +4,7 @@ import { newTurn, transition } from "../state/lifecycle.js";
 import { turnId as makeTurnId, makeIdGen } from "../lib/ids.js";
 import { loadCatalog } from "../knowledge/catalog.js";
 import { buildDirectorContext, buildNovelistContext, buildEditorContext, buildNpcContext } from "../context/builder.js";
-import { validateDirectorPacket, validateNovelistOutput, validateNpcDecision, formatIssues } from "../validate/deterministic.js";
+import { validateDirectorPacket, validateNovelistOutput, validateNpcDecision, formatIssues, normalizeDirectorPacket } from "../validate/deterministic.js";
 import { computeCommit } from "./commit.js";
 import { recordUsage, checkBudget, BudgetError } from "../meter/usage.js";
 import { ModelError } from "../models/adapter.js";
@@ -91,12 +91,12 @@ export class TurnRunner {
     };
   }
 
-  async #call(role, ctx, { schema, turn, allowFallback = true } = {}) {
+  async #call(role, ctx, { schema, turn, allowFallback = true, normalize } = {}) {
     const prev = this.caller.onUsage;
     this.caller.onUsage = this.#meter(role);
     try {
       checkBudget(this.store.usage(), this.store.manifest, { at: this.clock.iso(), turnId: turn.turn_id });
-      return await this.caller.call(role, { system: ctx.system, user: ctx.user, schema, sessionKey: this.sessions?.keyFor(role), turn: turn.turn_id, allowFallback });
+      return await this.caller.call(role, { system: ctx.system, user: ctx.user, schema, sessionKey: this.sessions?.keyFor(role), turn: turn.turn_id, allowFallback, normalize });
     } finally {
       this.caller.onUsage = prev;
     }
@@ -202,7 +202,7 @@ export class TurnRunner {
     let ctx = dctx;
     let last;
     for (let attempt = 0; attempt < 2; attempt++) {
-      const res = await this.#call("director", ctx, { schema: "director-packet", turn });
+      const res = await this.#call("director", ctx, { schema: "director-packet", turn, normalize: normalizeDirectorPacket });
       const packet = res.json;
       const v = validateDirectorPacket(packet, { facts: store.facts(), actors: env.actors, catalog: env.catalog, manifest: store.manifest, scene });
       if (v.ok) { if (v.warnings.length) this.log.warn(`[turn ${turn.turn_id}] director warnings: ${formatIssues({ errors: [], warnings: v.warnings })}`); return { ...packet, presentation: packet.presentation || scene.presentation, mode: scene.mode }; }

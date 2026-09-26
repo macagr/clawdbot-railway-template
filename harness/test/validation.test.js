@@ -16,6 +16,19 @@ function packet(over = {}) {
 }
 const codes = (r) => r.errors.map((e) => e.code);
 
+test("normalizeDirectorPacket drops echoed scene state and fills defaults; other extras stay strict", async () => {
+  const { normalizeDirectorPacket } = await import("../src/validate/deterministic.js");
+  const echoed = packet({ scene: { scene_id: "scene_seed", location: "location_a", time: "t", clock: 3, present: ["pc_fixture", "npc_a"], mode: "play", presentation: "scene", active_plots: ["plot_a"], summary: "s" } });
+  delete echoed.scene.beats;
+  const n = normalizeDirectorPacket(echoed);
+  assert.deepEqual(Object.keys(n.scene).sort(), ["beats", "location", "present", "time"]);
+  const { store, cleanup } = tempCampaign();
+  try {
+    assert.deepEqual(validateDirectorPacket(n, ctx(store)).errors, []);
+    assert.ok(codes(validateDirectorPacket(normalizeDirectorPacket(packet({ bogus: 1 })), ctx(store))).includes("schema"), "unknown top-level keys are still rejected");
+  } finally { cleanup(); }
+});
+
 test("valid packet passes", () => {
   const { store, cleanup } = tempCampaign();
   try { const r = validateDirectorPacket(packet(), ctx(store)); assert.deepEqual(r.errors, [], JSON.stringify(r)); } finally { cleanup(); }
