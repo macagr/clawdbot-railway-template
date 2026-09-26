@@ -9,7 +9,9 @@ A generic, campaign-agnostic harness for long-form narrative roleplay on OpenCla
 Run it:
 
 ```
-rp campaign install --from <package> --to /data/workspaces/<CAMPAIGN_ID>
+rp campaign source-sync                      # clone/fast-forward the private campaign repo (CAMPAIGNS_REPO_TOKEN)
+rp campaign update <CAMPAIGN_ID>             # install <repo>/<CAMPAIGN_ID> into /data/workspaces/<CAMPAIGN_ID>, validate
+#   or from any directory: rp campaign install --from <package> --to /data/workspaces/<CAMPAIGN_ID>
 rp setup-openclaw --campaign /data/workspaces/<CAMPAIGN_ID> --dry-run
 rp turn --campaign /data/workspaces/<CAMPAIGN_ID> --text "..."
 ```

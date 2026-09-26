@@ -13,8 +13,9 @@ import { dryRunSave } from "./persistence/save.js";
 import { openclawConfigFor, configSetOps, writeWorkspaces, applyConfig } from "./openclaw/setup.js";
 import { importSillyTavern, exportSillyTavern } from "./voices/sillytavern.js";
 import { resolveVoiceCard } from "./voices/voices.js";
-import { readJson, writeJson, exists, ensureDir, copyDir } from "./lib/fsx.js";
+import { readJson, writeJson, exists } from "./lib/fsx.js";
 import { redact } from "./lib/redact.js";
+import { installPackage, sourceConfig, syncSource, formatSyncResult, updateCampaign } from "./campaign/source.js";
 
 const HARNESS_ROOT = fileURLToPath(new URL("../", import.meta.url));
 
@@ -35,11 +36,14 @@ Operate
 Setup
   init --campaign <dir>                               create state/runtime for a campaign package (idempotent)
   campaign install --from <package dir> --to <workspace dir>   copy a package without touching existing state
+  campaign source-sync [--json]                       clone or fast-forward the private campaign repo (CAMPAIGNS_REPO_*)
+  campaign update <campaign-id> [--workspaces-root <dir>] [--json]   source-sync, install <repo>/<id>, validate (no OpenClaw changes)
   setup-openclaw --campaign <dir> [--dry-run] [--rp-bin <path>] [--workspaces-root <dir>]
   sillytavern import --campaign <dir> --file <card.json> [--id <id>]
   sillytavern export --campaign <dir> --voice <id> --out <file>
 
-Env: RP_LOG_LEVEL, RP_FAKE_RESPONSES (scripted fake models), RP_MODELS_CONFIG, provider keys per config/models.json`;
+Env: RP_LOG_LEVEL, RP_FAKE_RESPONSES (scripted fake models), RP_MODELS_CONFIG, provider keys per config/models.json,
+     CAMPAIGNS_REPO_TOKEN (required for source-sync/update), CAMPAIGNS_REPO_URL, CAMPAIGNS_REPO_BRANCH, CAMPAIGNS_REPO_DIR, RP_WORKSPACES_ROOT`;
 
 function parseArgs(argv) {
   const out = { _: [], flags: {} };
@@ -70,16 +74,23 @@ export async function main(argv = process.argv.slice(2), { env = process.env } =
   if (cmd === "init") { const dir = need(f, "campaign"); CampaignStore.init(dir); print(`initialized ${dir}`); return 0; }
   if (cmd === "campaign" && sub === "install") {
     const from = need(f, "from"), to = need(f, "to");
-    ensureDir(to);
-    for (const entry of fs.readdirSync(from)) {
-      if (["state", "runtime", "branches", "persistence"].includes(entry)) continue;
-      const src = path.join(from, entry), dst = path.join(to, entry);
-      if (fs.statSync(src).isDirectory()) copyDir(src, dst); else fs.copyFileSync(src, dst);
-    }
-    CampaignStore.init(to);
+    installPackage(from, to);
     print(`installed package from ${from} to ${to} (existing state/runtime untouched)`);
     return 0;
   }
+  if (cmd === "campaign" && sub === "source-sync") {
+    const r = syncSource(sourceConfig(env));
+    print(f.json ? r : formatSyncResult(r));
+    return r.status === "refused" ? 1 : 0;
+  }
+  if (cmd === "campaign" && sub === "update") {
+    const id = args._[2];
+    if (!id) throw new Error("campaign update <campaign-id>");
+    const r = updateCampaign(id, { env, workspacesRoot: f["workspaces-root"] });
+    print(f.json ? r : r.ok ? r.message : `campaign update failed at stage '${r.stage}': ${r.message}`);
+    return r.ok ? 0 : 1;
+  }
+  if (cmd === "campaign") throw new Error("campaign install|source-sync|update");
   if (cmd === "lint-generic") {
     const denylist = f.denylist || path.join(HARNESS_ROOT, "test", "fixtures", "campaign-generic", "denylist.txt");
     const roots = ["src", "prompts", "schemas", "config", "docs", "bin", "scripts"].map((d) => path.join(HARNESS_ROOT, d));

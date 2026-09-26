@@ -82,10 +82,14 @@ Defaults for omitted knobs are in `src/campaign/manifest.js`. The canon roles ar
 
 ## Adding a new campaign
 
-1. Copy `campaigns/_template/` (or the fixture) to a private location and fill in `campaign.json`, `canon/`, `prompts/`, `voices/`, `channels.json`, `casting.json`, `seed/state/` (roster, opening scene, initial facts with holdings, minds for majors), `denylist.txt`.
-2. `rp campaign install --from <pkg> --to /data/workspaces/<CAMPAIGN_ID>` then `rp validate --campaign …`.
+1. Copy `campaigns/_template/` (or the fixture) to a private location and fill in `campaign.json`, `canon/`, `prompts/`, `voices/`, `channels.json`, `casting.json`, `seed/state/` (roster, opening scene, initial facts with holdings, minds for majors), `denylist.txt`. The recommended private location is a git repository with one directory per campaign (`<repo>/<CAMPAIGN_ID>/…`, no `state/`, `runtime/`, `branches/` or `persistence/` committed).
+2. Either `rp campaign install --from <pkg> --to /data/workspaces/<CAMPAIGN_ID>` (any directory), or from the private repository: `rp campaign source-sync` then `rp campaign update <CAMPAIGN_ID>` (clone/fast-forward, install, validate; see [cli.md](cli.md) for `CAMPAIGNS_REPO_*`). Then `rp validate --campaign …` if you installed manually.
 3. `rp lint-generic --denylist <pkg>/denylist.txt` to confirm nothing campaign-specific leaked into the harness.
 4. `rp setup-openclaw --campaign … --dry-run`, review, then run without `--dry-run`; restart the gateway; `openclaw agents list --bindings`.
 5. `rp smoke-test --campaign …` (with real models) and `rp reconstruct-check`.
 6. Configure persistence env vars and `rp test-adapter`.
 7. Play. No orchestration code changes are needed.
+
+## Updating authored content
+
+Push to the campaign repository, then on the container `rp campaign update <CAMPAIGN_ID>`. The clone is only ever fast-forwarded (a dirty checkout, a diverged branch or an unexpected `origin` is refused and nothing is installed); the package files (`campaign.json`, `canon/`, `prompts/`, `voices/`, `channels.json`, `casting.json`, `seed/`, `craft/`, …) replace the workspace copies; live `state/`, `runtime/`, `branches/` and `persistence/` are never touched, so play continues at the current revision. Changes under `seed/state/` affect only fresh installs. Re-run `rp setup-openclaw` yourself only when `roles`, models or Discord ids changed; `campaign update` never reconfigures OpenClaw.

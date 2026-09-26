@@ -13,6 +13,7 @@
 | CONTEXT | `context.test.js` (Novelist/Editor exclusion, debug inspection) |
 | EDITOR, EXEMPLARS, FORM, MODES, CASTING, BRANCH, SAVE/SYNC, DISCORD, SILLYTAVERN, GENERIC-LEAK | one file each |
 | CLI integration | `cli.integration.test.js` (spawned processes with scripted models) |
+| CAMPAIGN SOURCE | `campaign-source.test.js` (real local git repositories as origin; token containment, command-scoped auth, refusals, `campaign update` preservation) |
 
 All tests use the synthetic fixture campaign (`test/fixtures/campaign-generic`) and the `FakeModelAdapter`; no network, no OpenClaw.
 
@@ -46,7 +47,8 @@ With `openclaw:<agent>` model refs the scenarios exercise the OpenClaw CLI adapt
 | Crash mid-commit | automatic: the journal is rolled forward on next open |
 | Crash mid-turn | `/resume` or any `rp` start abandons incomplete turns; the player re-sends |
 | Corrupt state file | `rp validate` names it; restore from `rp export-state` bundle (`rp import-state --confirm`), from durable canon (`/sync --discard` if provisional play is expendable), or from the volume backup |
-| Lost volume | restore volume backup, or `rp campaign install` + `/sync` (state from durable canon) + `rp import-state` if you have a bundle |
+| Lost volume | restore volume backup, or `rp campaign update <CAMPAIGN_ID>` (re-clones the campaign repository, installs) + `/sync` (state from durable canon) + `rp import-state` if you have a bundle |
+| Campaign clone refused (dirty / diverged / unexpected origin) | inspect `CAMPAIGNS_REPO_DIR` with git yourself; the harness never merges, rebases, stashes, resets or force-updates. Removing the directory and re-running `rp campaign source-sync` re-clones |
 | Bad save (backend wrote wrong data) | fix in the backend; local `pending-save.json` and `dirty.json` show what was sent |
 | Wrong branch promoted | main was backed up under `branches/_pre-promote-*`; copy back manually |
 
@@ -64,5 +66,6 @@ Nothing in the harness invents missing canon; recovery is restore-based.
 - Coordinator: `tools.exec.mode: allowlist` plus one path-only approval entry for `/opt/rp-harness/bin/rp` in the exec-approvals store; never reads campaign files. Verify with `openclaw approvals get --gateway --agent <CAMPAIGN_ID>`.
 - Specialists: no tools; every task is a self-contained message.
 - Secrets: provider keys and persistence tokens are env vars; never written to the workspace; logs redact bearer tokens and key-like strings.
+- Campaign repository: `CAMPAIGNS_REPO_TOKEN` should be a GitHub fine-grained personal access token scoped only to the campaign repository with repository **Contents: read-only** permission. `rp campaign source-sync` passes it to each git process as `-c http.extraHeader=Authorization: Basic …` (username `x-access-token`) with credential helpers disabled for that process; the remote URL stays the plain HTTPS URL and nothing is written to `.git/config` or `.git-credentials`. Git output is scrubbed of the token and header before it can reach an error message or the console. Tests: `test/campaign-source.test.js`.
 - Durable canon credentials (Google etc.) live only in n8n.
 - Local files: workspace under the persistent volume with the same permissions as OpenClaw state.
