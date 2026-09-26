@@ -21,7 +21,7 @@ Keys are read from environment variables only. The HTTP adapter sends `response_
 
 ## Usage meter (`meter/usage.js`)
 
-`runtime/usage.json`: one record per call (role, model, tokens, cached tokens, cost, estimated flag) and totals by day, month and role. Cost = provider-reported cost when available, else role prices × tokens (cached input at half price). Caps (`budget.per_turn/per_day/per_month`) are checked **before each call**; reaching a cap fails the turn before any model runs (`Budget cap reached`). `warn_fraction` produces warnings in `/status`.
+`runtime/usage.json`: one record per call (role, model, tokens, cached tokens, cost, estimated flag) and totals by day, month and role. Token counts are taken per CLI/HTTP invocation. Cost precedence: configured role prices × tokens (cached input at half price) when `input_price_per_m`/`output_price_per_m` are set for the role; otherwise a positive provider-reported cost; otherwise 0 flagged `estimated`. Provider-reported cost is deliberately not preferred because `openclaw agent` envelopes do not report it per invocation. Set prices for every role you use so `/status` and the caps are meaningful. Caps (`budget.per_turn/per_day/per_month`) are checked **before each call**; reaching a cap fails the turn before any model runs (`Budget cap reached`). `warn_fraction` produces warnings in `/status`.
 
 ## Prompt caching
 

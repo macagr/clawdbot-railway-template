@@ -6,7 +6,7 @@ All commands take `--campaign <workspace dir>` unless noted. Exit codes: 0 ok, 1
 
 | Command | Description |
 |---|---|
-| `rp turn [--event-id <id>] [--transport cli\|discord\|openclaw-ui] [--player <id>] (--text <t> \| --stdin)` | run one turn; prints the player-facing output |
+| `rp turn [--event-id <id>] [--transport cli\|discord\|openclaw-ui] [--player <id>] [--show-stop\|--hide-stop] (--text <t> \| --stdin)` | run one turn; prints the player-facing output (stop line per `output.show_stop_reason` unless overridden) |
 | `rp command [--event-id <id>] [--transport <t>] -- /<cmd> [args]` | run a slash command |
 | `rp discord --event <file\|->` | handle a normalized Discord event `{message_id, channel_id, guild_id, user_id, thread_id?, text}`; prints `{chunks, turn_id}` |
 | `rp deliver --turn <id> [--message-id <id>]... [--transport <t>]` | mark a committed turn delivered |

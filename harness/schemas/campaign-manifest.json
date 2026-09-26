@@ -196,7 +196,8 @@
       "additionalProperties": false,
       "properties": {
         "max_chars": { "type": "integer", "minimum": 200 },
-        "show_presentation_tag": { "type": "boolean" }
+        "show_presentation_tag": { "type": "boolean" },
+        "show_stop_reason": { "type": "boolean", "description": "append the Director's stop_reason as an (( ... )) line to player-facing output; the metadata stays in the turn record either way" }
       }
     },
     "denylist": { "type": "string", "description": "path to a text file of campaign-specific tokens forbidden in generic files" },

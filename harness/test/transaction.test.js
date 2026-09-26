@@ -61,6 +61,18 @@ test("model-written OOC notes are stripped, so the harness stop line is never du
   } finally { r.cleanup(); }
 });
 
+test("stop_reason rendering is a presentation option; the metadata always stays in the turn record", async () => {
+  const r = makeRunner({ responses: { director: [directorPacket(), directorPacket({ fact_proposals: [], knowledge_events: [], mind_deltas: [] })], novelist: [NOVELIST_PROSE, NOVELIST_PROSE], editor: [EDITOR_OK, EDITOR_OK] }, manifestPatch: (m) => { m.output = { ...(m.output || {}), show_stop_reason: false }; return m; } });
+  try {
+    const res = await r.runner.run({ text: "x", eventId: "e1" });
+    assert.doesNotMatch(res.output, /\(\( /, "hidden by manifest");
+    assert.equal(res.turn.packet.stop_for_player, true);
+    assert.match(res.turn.packet.stop_reason, /waiting for an answer/);
+    const shown = await r.runner.run({ text: "y", eventId: "e2", showStop: true });
+    assert.match(shown.output, /\(\( <NPC_A> is waiting for an answer\. \)\)/, "per-run override");
+  } finally { r.cleanup(); }
+});
+
 test("duplicate event ids never create duplicate canonical turns; redelivery returns stored output", async () => {
   const r = makeRunner({ responses: ok() });
   try {

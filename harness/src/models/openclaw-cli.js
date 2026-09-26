@@ -39,10 +39,7 @@ export class OpenClawCliAdapter {
       };
       if (usage.input_tokens === 0 && usage.output_tokens === 0) usage = { ...usage, ...findUsage(meta) };
       const cost = [data.costUsd, meta.costUsd, meta.cost, data.result?.costUsd, data.summary?.costUsd, u.costUsd].find((c) => typeof c === "number");
-      if (usage.input_tokens === 0 && usage.output_tokens === 0) {
-        const keysOf = (o) => (o && typeof o === "object" ? Object.keys(o).join(", ") : String(o));
-        this.log?.debug?.(`[openclaw-cli] no usage found; keys: top=[${keysOf(data)}] result=[${keysOf(data.result)}] result.meta=[${keysOf(data.result?.meta)}] result.meta json=${JSON.stringify(data.result?.meta ?? null).slice(0, 600)}`);
-      }
+      this.log?.debug?.(`[openclaw-cli] ${role}/${agentId} usage=${JSON.stringify(usage)} cost=${cost ?? "n/a"} result.meta=${JSON.stringify(data.result?.meta ?? data.meta ?? null).slice(0, 500)}`);
       return { text, usage, model: data.model || model || agentId, provider: "openclaw", cost_reported: cost };
     } finally {
       try { fs.rmSync(file, { force: true }); } catch {}

@@ -21,7 +21,7 @@ const HARNESS_ROOT = fileURLToPath(new URL("../", import.meta.url));
 const USAGE = `rp <command> [options]
 
 Play
-  turn --campaign <dir> [--event-id <id>] [--transport cli|discord|openclaw-ui] [--player <id>] (--text <t> | --stdin)
+  turn --campaign <dir> [--event-id <id>] [--transport cli|discord|openclaw-ui] [--player <id>] [--show-stop|--hide-stop] (--text <t> | --stdin)
   command --campaign <dir> [--event-id <id>] [--transport <t>] -- /<command> [args]
   discord --campaign <dir> --event <json-file|->      handle one normalized Discord event; prints JSON {chunks, turn_id}
   deliver --campaign <dir> --turn <id> [--message-id <id>...]   mark a committed turn delivered
@@ -97,11 +97,12 @@ export async function main(argv = process.argv.slice(2), { env = process.env } =
       const text = f.stdin ? readStdin() : f.text;
       if (!text || !String(text).trim()) throw new Error("no input text (--text or --stdin)");
       const t = new TextTransport(h, { name: transport });
+      const showStop = f["show-stop"] ? true : f["hide-stop"] ? false : null;
       if (transport === "discord") {
-        const res = await h.runner.run({ text: String(text).trim(), eventId: f["event-id"], transport, player: f.player });
+        const res = await h.runner.run({ text: String(text).trim(), eventId: f["event-id"], transport, player: f.player, showStop });
         print(res.output); return res.failed ? 2 : 0;
       }
-      const res = await t.handle(String(text).trim(), { eventId: f["event-id"], player: f.player });
+      const res = await t.handle(String(text).trim(), { eventId: f["event-id"], player: f.player, showStop });
       print(res.text); return res.failed ? 2 : 0;
     }
     case "command": {

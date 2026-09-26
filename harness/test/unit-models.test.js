@@ -95,13 +95,15 @@ test("usage meter: cost estimate from role prices, caps enforced, warnings below
     assert.deepEqual(checkBudget(u, store.manifest, { at, turnId: "t1" }), ["per_turn: 0.9000 of 1"]);
     u = recordUsage(u, store.manifest, { at, role: "director", model: "fake/d", usage: { input_tokens: 500_000, output_tokens: 0 }, turn: "t1" });
     assert.throws(() => checkBudget(u, store.manifest, { at, turnId: "t1" }), BudgetError);
-    // reported cost from the provider wins over the estimate
-    const u2 = recordUsage(store.usage(), store.manifest, { at, role: "novelist", model: "x", usage: { input_tokens: 1, output_tokens: 1 }, cost_reported: 0.42 });
-    assert.equal(u2.totals.cost, 0.42);
+    // configured role prices win over a provider-reported cost (reported cost is not reliably per call)
+    const u2 = recordUsage(store.usage(), store.manifest, { at, role: "novelist", model: "x", usage: { input_tokens: 1_000_000, output_tokens: 0 }, cost_reported: 0.42 });
+    assert.ok(Math.abs(u2.totals.cost - 1) < 1e-9);
     assert.equal(u2.calls[0].estimated, false);
-    // a reported 0 with real tokens is "unpriced": use the role-price estimate instead
-    const u3 = recordUsage(store.usage(), store.manifest, { at, role: "novelist", model: "x", usage: { input_tokens: 1_000_000, output_tokens: 0 }, cost_reported: 0 });
-    assert.ok(Math.abs(u3.totals.cost - 1) < 1e-9);
-    assert.equal(u3.calls[0].estimated, false, "priced from configured role prices");
+    // an unpriced role uses a positive reported cost; a reported 0 stays 0 and is flagged estimated
+    const m = structuredClone(store.manifest); delete m.roles.editor.input_price_per_m; delete m.roles.editor.output_price_per_m;
+    const u3 = recordUsage(store.usage(), m, { at, role: "editor", model: "x", usage: { input_tokens: 10, output_tokens: 1 }, cost_reported: 0.05 });
+    assert.equal(u3.totals.cost, 0.05); assert.equal(u3.calls[0].estimated, false);
+    const u4 = recordUsage(store.usage(), m, { at, role: "editor", model: "x", usage: { input_tokens: 10, output_tokens: 1 }, cost_reported: 0 });
+    assert.equal(u4.totals.cost, 0); assert.equal(u4.calls[0].estimated, true);
   } finally { cleanup(); }
 });

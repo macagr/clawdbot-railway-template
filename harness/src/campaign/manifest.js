@@ -42,7 +42,7 @@ export const DEFAULTS = Object.freeze({
   save: { adapter: "none", session_summary: false, timeout_ms: 30000, retries: 2, local_dir: "persistence" },
   sessions: { reset_on_resume: true, reset_on_scene_end: true, token_threshold: 120000 },
   discord: { threads: "off" },
-  output: { max_chars: 3500, show_presentation_tag: true },
+  output: { max_chars: 3500, show_presentation_tag: true, show_stop_reason: true },
   roles: {},
 });
 

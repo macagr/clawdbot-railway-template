@@ -16,13 +16,15 @@ export function estimateCost(manifest, role, usage) {
 
 export function recordUsage(usageRec, manifest, { at, role, model, usage, turn, cost_reported }) {
   const est = estimateCost(manifest, role, usage);
-  // A reported cost of 0 with real token counts means the provider did not price the call
-  // (seen with openclaw agent envelopes); fall back to the role-price estimate.
-  const reported = typeof cost_reported === "number" && (cost_reported > 0 || (usage.input_tokens + usage.output_tokens) === 0);
-  const cost = reported ? cost_reported : est.cost;
+  // Precedence: configured role prices (deterministic, per call) > a positive reported cost >
+  // zero. Provider-reported cost is not reliably per invocation (openclaw agent envelopes), so
+  // it only fills in when the campaign has not priced the role.
+  const priced = !est.estimated;
+  const reported = !priced && typeof cost_reported === "number" && cost_reported > 0;
+  const cost = priced ? est.cost : reported ? cost_reported : 0;
   const day = at.slice(0, 10), month = at.slice(0, 7);
   const next = structuredClone(usageRec);
-  next.calls.push({ at, ...(turn ? { turn } : {}), role, model, input_tokens: usage.input_tokens, output_tokens: usage.output_tokens, ...(usage.cached_tokens ? { cached_tokens: usage.cached_tokens } : {}), cost, estimated: reported ? false : est.estimated });
+  next.calls.push({ at, ...(turn ? { turn } : {}), role, model, input_tokens: usage.input_tokens, output_tokens: usage.output_tokens, ...(usage.cached_tokens ? { cached_tokens: usage.cached_tokens } : {}), cost, estimated: !(priced || reported) });
   if (next.calls.length > 5000) next.calls = next.calls.slice(-5000);
   const t = next.totals;
   t.cost += cost; t.input_tokens += usage.input_tokens; t.output_tokens += usage.output_tokens;

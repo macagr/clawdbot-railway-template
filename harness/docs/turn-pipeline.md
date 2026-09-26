@@ -57,4 +57,4 @@ Dimensions (campaign-configurable, defaults in `manifest.js`): length_band, stru
 
 ## Output
 
-`plain prose` (+ a visible presentation note when policy produces one) (+ `(( stop_reason ))` when the Director stopped for the player). Discord chunking happens in the transport.
+`plain prose` (+ a visible presentation note when policy produces one) (+ `(( stop_reason ))` when the Director stopped for the player and `output.show_stop_reason` is true, the default). `rp turn --hide-stop` / `--show-stop` override per run. `stop_for_player` and `stop_reason` always remain in the turn record and the Director packet for audit; the option only affects rendering. Discord chunking happens in the transport.

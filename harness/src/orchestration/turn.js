@@ -39,8 +39,9 @@ export class TurnRunner {
   refreshEnv() { this.env = { actors: this.store.actors(), catalog: loadCatalog(this.store) }; return this.env; }
 
   /** Entry point. Returns { turn, output, reused } and never throws for model/validation failures. */
-  async run({ text, eventId, transport = "cli", player, presentation: forcedPresentation, nonCanon = null }) {
+  async run({ text, eventId, transport = "cli", player, presentation: forcedPresentation, nonCanon = null, showStop = null }) {
     this.nonCanonLabel = nonCanon;
+    this.showStopOverride = showStop;
     const store = this.store;
     const idx = store.eventIndex();
     if (eventId && idx.events[eventId]) {
@@ -172,7 +173,7 @@ export class TurnRunner {
 
     // ---- committed ----
     const pres = resolvePresentation(m, scene, packet);
-    const output = this.#renderOutput(validation.plain, { packet, presentation: pres, showTag: m.output.show_presentation_tag });
+    const output = this.#renderOutput(validation.plain, { packet, presentation: pres, showTag: m.output.show_presentation_tag, showStop: this.showStopOverride ?? m.output.show_stop_reason });
     const propagationExtra = await this.#modelPropagation(turn, packet, env);
     const commit = computeCommit(store, { turn, packet: { ...packet, knowledge_events: [...(packet.knowledge_events || []), ...propagationExtra] }, plainOutput: validation.plain, npcMindDeltas, castings, catalog: env.catalog, idGen: this.idGen, presentation: pres.changed ? pres.presentation : undefined, presentationNote: pres.note, clock: this.clock, canon: true });
     const committedTurn = transition(turn, "committed", { at: at(), patch: { revision_committed: commit.revision, output, usage: { cost: turnCostOf(store.usage(), turn.turn_id) } } });
@@ -303,11 +304,12 @@ export class TurnRunner {
     return (this.store.manifest.modes.presentation.editor_modes || []).includes(presentation);
   }
 
-  #renderOutput(plain, { packet, presentation, showTag }) {
+  #renderOutput(plain, { packet, presentation, showTag, showStop = true }) {
     const parts = [];
     if (showTag && presentation.note) parts.push(presentation.note);
     parts.push(plain);
-    if (packet.stop_for_player && packet.stop_reason) parts.push(`${OOC_PREFIX}${packet.stop_reason}${OOC_SUFFIX}`);
+    // stop_for_player / stop_reason always stay in the turn record (packet); this only controls rendering.
+    if (showStop && packet.stop_for_player && packet.stop_reason) parts.push(`${OOC_PREFIX}${packet.stop_reason}${OOC_SUFFIX}`);
     return parts.join("\n\n");
   }
 

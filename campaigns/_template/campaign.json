@@ -7,11 +7,11 @@
     "coordinator": { "model": "fake/coordinator" },
     "director": { "model": "fake/director", "temperature": 0.4, "input_price_per_m": 1, "output_price_per_m": 4 },
     "novelist": { "model": "fake/novelist", "temperature": 0.9, "fallback": "fake/novelist-fallback", "input_price_per_m": 1, "output_price_per_m": 4 },
-    "editor": { "model": "fake/editor" },
-    "npc": { "model": "fake/npc" },
-    "casting": { "model": "fake/casting" },
-    "summary": { "model": "fake/summary" },
-    "propagation": { "model": "fake/propagation" }
+    "editor": { "model": "fake/editor", "input_price_per_m": 1, "output_price_per_m": 4 },
+    "npc": { "model": "fake/npc", "input_price_per_m": 1, "output_price_per_m": 4 },
+    "casting": { "model": "fake/casting", "input_price_per_m": 1, "output_price_per_m": 4 },
+    "summary": { "model": "fake/summary", "input_price_per_m": 0.2, "output_price_per_m": 0.6 },
+    "propagation": { "model": "fake/propagation", "input_price_per_m": 1, "output_price_per_m": 4 }
   },
   "budget": { "per_turn": 1, "per_day": 5, "per_month": 50 },
   "canon": {
