@@ -201,26 +201,77 @@ function writeVersionMarker(version) {
   }
 }
 
+// Files/dirs the wrapper itself creates on a fresh volume. They do not indicate an existing install.
+const WRAPPER_OWNED_STATE_ENTRIES = new Set([".wrapper-openclaw-version", "gateway.token", "logs"]);
+
+// True when the state dir holds OpenClaw state from a previous run: a config file (or its
+// backups), credentials, databases, sessions, agents, auth profiles, etc. An empty dir, or one
+// that only contains wrapper-owned files and empty directories, is a fresh install.
+function hasMeaningfulState(stateDir) {
+  let entries;
+  try {
+    entries = fs.readdirSync(stateDir, { withFileTypes: true });
+  } catch {
+    return false;
+  }
+  for (const e of entries) {
+    if (WRAPPER_OWNED_STATE_ENTRIES.has(e.name)) continue;
+    if (e.isDirectory()) {
+      // Empty directories (e.g. `credentials/` pre-created by the wrapper) do not count.
+      try {
+        if (fs.readdirSync(path.join(stateDir, e.name)).length > 0) return true;
+      } catch {
+        // unreadable: treat as meaningful, the safe direction
+        return true;
+      }
+      continue;
+    }
+    // Any other file (openclaw.json, *.bak-*, *.db, .env, auth-profiles.json, ...) is real state.
+    return true;
+  }
+  return false;
+}
+
+// Pure decision for the migration gate.
+//   "fresh"   -> no marker and no existing state: initialize the marker, no migration
+//   "ok"      -> marker matches the running version
+//   "migrate" -> existing state without marker, or marker differs from the running version
+function decideMigration({ current, recorded, hasState }) {
+  if (recorded && recorded === current) return "ok";
+  if (!recorded && !hasState) return "fresh";
+  return "migrate";
+}
+
 // Decide whether the persisted state must be migrated before the gateway may start.
-// Does not mutate any state; only reads the marker and the CLI version.
+// Only mutates state in the "fresh" case (writes the version marker on an otherwise empty dir).
 async function checkMigrationGate() {
-  if (!MIGRATION_GATE_ENABLED || !isConfigured()) {
+  if (!MIGRATION_GATE_ENABLED) {
     migrationRequired = null;
     return migrationRequired;
   }
   const current = await detectOpenclawVersion();
-  const recorded = readVersionMarker();
   if (!current) {
     // Can't tell; don't block, but leave a breadcrumb.
     console.warn("[wrapper] could not detect openclaw version; migration gate skipped");
     migrationRequired = null;
     return migrationRequired;
   }
-  if (recorded === current) {
+  const recorded = readVersionMarker();
+  const hasState = hasMeaningfulState(STATE_DIR);
+  const decision = decideMigration({ current, recorded, hasState });
+
+  if (decision === "ok") {
     migrationRequired = null;
-    return migrationRequired;
+  } else if (decision === "fresh") {
+    console.log(`[wrapper] fresh state dir; recording openclaw ${current} as the baseline version`);
+    writeVersionMarker(current);
+    migrationRequired = null;
+  } else {
+    migrationRequired = {
+      from: recorded || "unknown (existing state without a version marker, e.g. 2026.3.8)",
+      to: current,
+    };
   }
-  migrationRequired = { from: recorded || "unknown (no marker; state predates this wrapper, e.g. 2026.3.8)", to: current };
   return migrationRequired;
 }
 
@@ -930,6 +981,10 @@ app.post("/setup/api/run", requireSetupAuth, async (req, res) => {
       if (res.writableEnded || res.headersSent) return;
       res.status(status).json(body);
     };
+    if (migrationRequired) {
+      // Existing state from another OpenClaw version: onboarding must not run on top of it.
+      return respondJson(409, { ok: false, output: `Setup blocked: migration required.\n${migrationInstructions()}\n` });
+    }
     if (isConfigured()) {
       await ensureGatewayRunning();
       return respondJson(200, {

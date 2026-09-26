@@ -125,7 +125,13 @@ mkdir -p /data/npm /data/npm-cache /data/pnpm /data/pnpm-store
 
 The version is pinned in the Dockerfile: `ARG OPENCLAW_VERSION=2026.9.5`. Override it in Railway (Settings → Build → Build Args) or edit the Dockerfile. Do not track `latest`.
 
-The wrapper records the OpenClaw version that last ran against `/data/.openclaw` in `/data/.openclaw/.wrapper-openclaw-version`. When the running version differs (or no marker exists), the **migration gate** keeps the gateway stopped and `/setup` shows a *Migration required* banner. Normal startups never modify persisted state.
+The wrapper records the OpenClaw version that last ran against `/data/.openclaw` in `/data/.openclaw/.wrapper-openclaw-version`. On boot the **migration gate** decides:
+
+- **Fresh volume** (no marker and no existing state: no config, credentials, databases or sessions): the marker is initialized to the running version and setup proceeds normally.
+- **Existing state without a marker** (a volume from the old template, or leftovers after *Reset setup*): migration required.
+- **Marker differs from the running version**: migration required.
+
+While a migration is required the gateway stays stopped, onboarding is blocked, and `/setup` shows a *Migration required* banner. Apart from initializing the marker on a fresh volume, normal startups never modify persisted state.
 
 ### Bridge migration: 2026.3.8 → 2026.9.5
 
