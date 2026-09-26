@@ -69,9 +69,15 @@ test("workspaces: coordinator AGENTS.md relays only; specialists get self-contai
     const coord = fs.readFileSync(path.join(r.dir, "AGENTS.md"), "utf8");
     assert.match(coord, /rp turn --campaign campaign_fixture --transport discord/);
     assert.match(coord, /Never read, quote, or reason about files/);
-    const spec = written.find((w) => w.includes("campaign_fixture-director"));
+    const spec = written.find((w) => w.includes("campaign_fixture-director") && w.endsWith("AGENTS.md"));
     assert.match(fs.readFileSync(spec, "utf8"), /Director specialist/);
-    fs.rmSync(path.dirname(path.dirname(spec)), { recursive: true, force: true });
+    const dir = path.dirname(spec);
+    // seeded bootstrap files are neutralised: one-line identity files, BOOTSTRAP.md removed
+    fs.writeFileSync(path.join(dir, "BOOTSTRAP.md"), "x".repeat(8000));
+    writeWorkspaces(r.store, { workspacesRoot: path.dirname(dir), transport: "discord" });
+    assert.ok(!fs.existsSync(path.join(dir, "BOOTSTRAP.md")));
+    for (const f of ["IDENTITY.md", "SOUL.md", "USER.md"]) assert.ok(fs.readFileSync(path.join(dir, f), "utf8").length < 200, `${f} is minimal`);
+    fs.rmSync(path.dirname(dir), { recursive: true, force: true });
   } finally { r.cleanup(); }
 });
 

@@ -39,6 +39,8 @@ export class OpenClawCliAdapter {
         input_tokens: num(u.input ?? u.input_tokens ?? u.inputTokens ?? u.prompt_tokens ?? u.promptTokens),
         output_tokens: num(u.output ?? u.output_tokens ?? u.outputTokens ?? u.completion_tokens ?? u.completionTokens),
         cached_tokens: num(u.cacheRead ?? u.cached ?? u.cached_tokens ?? u.cache_read_input_tokens ?? 0),
+        cache_write_tokens: num(u.cacheWrite ?? 0),
+        reasoning_tokens: num(u.reasoningTokens ?? u.reasoning_tokens ?? 0),
       };
       if (usage.input_tokens === 0 && usage.output_tokens === 0) usage = { ...usage, ...findUsage(meta) };
       const cost = [u.cost?.total, am.cost?.total, data.costUsd, meta.costUsd, meta.cost, data.result?.costUsd, data.summary?.costUsd, u.costUsd].find((c) => typeof c === "number");
@@ -90,6 +92,7 @@ export function extractUsage(data) {
   const u = am.usage || am.lastCallUsage || {};
   return {
     input_tokens: num(u.input), output_tokens: num(u.output), cached_tokens: num(u.cacheRead),
+    cache_write_tokens: num(u.cacheWrite), reasoning_tokens: num(u.reasoningTokens),
     cost: typeof u.cost?.total === "number" ? u.cost.total : undefined, model: am.model, provider: am.provider,
   };
 }

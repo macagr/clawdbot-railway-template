@@ -16,15 +16,22 @@ export function estimateCost(manifest, role, usage) {
 
 export function recordUsage(usageRec, manifest, { at, role, model, usage, turn, cost_reported }) {
   const est = estimateCost(manifest, role, usage);
-  // Precedence: configured role prices (deterministic, per call) > a positive reported cost >
-  // zero. Provider-reported cost is not reliably per invocation (openclaw agent envelopes), so
-  // it only fills in when the campaign has not priced the role.
-  const priced = !est.estimated;
-  const reported = !priced && typeof cost_reported === "number" && cost_reported > 0;
-  const cost = priced ? est.cost : reported ? cost_reported : 0;
+  // Precedence: an exact reported per-invocation cost (> 0) > configured role prices > zero.
+  // openclaw agent reports result.meta.agentMeta.usage.cost.total per invocation; HTTP providers
+  // usually report nothing, so role prices remain the fallback.
+  const reported = typeof cost_reported === "number" && cost_reported > 0;
+  const priced = !reported && !est.estimated;
+  const cost = reported ? cost_reported : priced ? est.cost : 0;
   const day = at.slice(0, 10), month = at.slice(0, 7);
   const next = structuredClone(usageRec);
-  next.calls.push({ at, ...(turn ? { turn } : {}), role, model, input_tokens: usage.input_tokens, output_tokens: usage.output_tokens, ...(usage.cached_tokens ? { cached_tokens: usage.cached_tokens } : {}), cost, estimated: !(priced || reported) });
+  next.calls.push({
+    at, ...(turn ? { turn } : {}), role, model,
+    input_tokens: usage.input_tokens, output_tokens: usage.output_tokens,
+    ...(usage.cached_tokens ? { cached_tokens: usage.cached_tokens } : {}),
+    ...(usage.cache_write_tokens ? { cache_write_tokens: usage.cache_write_tokens } : {}),
+    ...(usage.reasoning_tokens ? { reasoning_tokens: usage.reasoning_tokens } : {}),
+    cost, estimated: !(priced || reported), ...(reported ? { cost_source: "reported" } : priced ? { cost_source: "role_prices" } : {}),
+  });
   if (next.calls.length > 5000) next.calls = next.calls.slice(-5000);
   const t = next.totals;
   t.cost += cost; t.input_tokens += usage.input_tokens; t.output_tokens += usage.output_tokens;

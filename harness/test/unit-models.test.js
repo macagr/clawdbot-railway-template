@@ -83,9 +83,19 @@ test("openclaw agent --json envelope (2026.9.5 live shape): usage, cache and cos
   const envelope = { runId: "r", status: "ok", summary: { completed: true }, result: { payloads: [{ text: "ok" }], meta: { durationMs: 3401, agentMeta: { sessionId: "s", provider: "openrouter", model: "openrouter/auto", usage: { input: 2856, output: 291, cacheRead: 37888, cacheWrite: 0, reasoningTokens: 30, total: 41035, cost: { total: 0.00064050164 } }, lastCallUsage: { input: 2856, output: 291 } } } } };
   const u = extractUsage(envelope);
   assert.equal(u.input_tokens, 2856); assert.equal(u.output_tokens, 291); assert.equal(u.cached_tokens, 37888);
+  assert.equal(u.cache_write_tokens, 0); assert.equal(u.reasoning_tokens, 30);
   assert.ok(Math.abs(u.cost - 0.00064050164) < 1e-12);
+  // end to end through the adapter: the reported cost reaches the meter as cost_reported
+  const { OpenClawCliAdapter } = await import("../src/models/openclaw-cli.js");
+  const spawn = () => { const { EventEmitter } = process.getBuiltinModule("node:events"); const p = new EventEmitter(); p.stdout = new EventEmitter(); p.stderr = new EventEmitter(); p.kill = () => {}; setTimeout(() => { p.stdout.emit("data", JSON.stringify(envelope)); p.emit("close", 0); }, 0); return p; };
+  const a = new OpenClawCliAdapter({ spawn, env: {} });
+  const res = await a.complete({ role: "novelist", agentId: "x", user: "u", timeoutMs: 1000 });
+  assert.equal(res.text, "ok");
+  assert.deepEqual(res.usage, { input_tokens: 2856, output_tokens: 291, cached_tokens: 37888, cache_write_tokens: 0, reasoning_tokens: 30 });
+  assert.ok(Math.abs(res.cost_reported - 0.00064050164) < 1e-12);
+  assert.equal(res.provider, "openclaw/openrouter");
   assert.equal(u.provider, "openrouter"); assert.equal(u.model, "openrouter/auto");
-  assert.deepEqual(extractUsage({ result: { meta: {} } }), { input_tokens: 0, output_tokens: 0, cached_tokens: 0, cost: undefined, model: undefined, provider: undefined });
+  assert.deepEqual(extractUsage({ result: { meta: {} } }), { input_tokens: 0, output_tokens: 0, cached_tokens: 0, cache_write_tokens: 0, reasoning_tokens: 0, cost: undefined, model: undefined, provider: undefined });
 });
 
 test("openclaw agent JSON envelope: reply text is taken from payloads", () => {
@@ -105,14 +115,15 @@ test("usage meter: cost estimate from role prices, caps enforced, warnings below
     assert.deepEqual(checkBudget(u, store.manifest, { at, turnId: "t1" }), ["per_turn: 0.9000 of 1"]);
     u = recordUsage(u, store.manifest, { at, role: "director", model: "fake/d", usage: { input_tokens: 500_000, output_tokens: 0 }, turn: "t1" });
     assert.throws(() => checkBudget(u, store.manifest, { at, turnId: "t1" }), BudgetError);
-    // configured role prices win over a provider-reported cost (reported cost is not reliably per call)
-    const u2 = recordUsage(store.usage(), store.manifest, { at, role: "novelist", model: "x", usage: { input_tokens: 1_000_000, output_tokens: 0 }, cost_reported: 0.42 });
-    assert.ok(Math.abs(u2.totals.cost - 1) < 1e-9);
-    assert.equal(u2.calls[0].estimated, false);
-    // an unpriced role uses a positive reported cost; a reported 0 stays 0 and is flagged estimated
+    // an exact reported per-invocation cost is authoritative over configured role prices
+    const u2 = recordUsage(store.usage(), store.manifest, { at, role: "novelist", model: "x", usage: { input_tokens: 1_000_000, output_tokens: 0, cache_write_tokens: 5, reasoning_tokens: 7 }, cost_reported: 0.42 });
+    assert.equal(u2.totals.cost, 0.42);
+    assert.equal(u2.calls[0].cost_source, "reported");
+    assert.equal(u2.calls[0].cache_write_tokens, 5); assert.equal(u2.calls[0].reasoning_tokens, 7);
+    // no reported cost -> role prices; reported 0 with an unpriced role -> 0 flagged estimated
+    const u3 = recordUsage(store.usage(), store.manifest, { at, role: "novelist", model: "x", usage: { input_tokens: 1_000_000, output_tokens: 0 }, cost_reported: 0 });
+    assert.ok(Math.abs(u3.totals.cost - 1) < 1e-9); assert.equal(u3.calls[0].cost_source, "role_prices");
     const m = structuredClone(store.manifest); delete m.roles.editor.input_price_per_m; delete m.roles.editor.output_price_per_m;
-    const u3 = recordUsage(store.usage(), m, { at, role: "editor", model: "x", usage: { input_tokens: 10, output_tokens: 1 }, cost_reported: 0.05 });
-    assert.equal(u3.totals.cost, 0.05); assert.equal(u3.calls[0].estimated, false);
     const u4 = recordUsage(store.usage(), m, { at, role: "editor", model: "x", usage: { input_tokens: 10, output_tokens: 1 }, cost_reported: 0 });
     assert.equal(u4.totals.cost, 0); assert.equal(u4.calls[0].estimated, true);
   } finally { cleanup(); }

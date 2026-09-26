@@ -2,6 +2,7 @@
 // apply them through the openclaw CLI (or print them with --dry-run). Also writes the thin
 // coordinator/specialist workspace files. Campaign content stays in the campaign package.
 import childProcess from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { ensureDir, writeFileAtomic, exists } from "../lib/fsx.js";
 import { genericPrompt, fill } from "../prompts/render.js";
@@ -128,9 +129,25 @@ export function writeWorkspaces(store, { workspacesRoot, transport = "discord" }
     const p = path.join(dir, "AGENTS.md");
     writeFileAtomic(p, fill(genericPrompt("specialist-AGENTS"), { campaign_id: m.id, role_title: role[0].toUpperCase() + role.slice(1) }));
     written.push(p);
+    // OpenClaw seeds default bootstrap files into new workspaces (IDENTITY/SOUL/USER and an
+    // ~8 KB BOOTSTRAP.md first-run ritual). Specialists must not carry them: keep the three
+    // identity files to one line so nothing is re-seeded, and remove BOOTSTRAP.md.
+    for (const [name, text] of Object.entries(SPECIALIST_MINIMAL_FILES)) {
+      const fp = path.join(dir, name);
+      writeFileAtomic(fp, fill(text, { role_title: role[0].toUpperCase() + role.slice(1), campaign_id: m.id }));
+      written.push(fp);
+    }
+    const bootstrap = path.join(dir, "BOOTSTRAP.md");
+    if (exists(bootstrap)) { fs.rmSync(bootstrap, { force: true }); written.push(`${bootstrap} (removed)`); }
   }
   return written;
 }
+
+export const SPECIALIST_MINIMAL_FILES = Object.freeze({
+  "IDENTITY.md": "{{role_title}} specialist ({{campaign_id}}). No persona beyond the task instructions.\n",
+  "SOUL.md": "Follow the task message exactly. No conversation, no initiative, no tools.\n",
+  "USER.md": "The only user is the harness process. Never address a human.\n",
+});
 
 /**
  * Apply config through the openclaw CLI, then the exec-approval allowlist entries.
