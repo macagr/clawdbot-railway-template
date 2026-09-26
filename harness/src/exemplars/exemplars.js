@@ -22,7 +22,7 @@ export function markTurn(store, { kind, turnId, note, at, pinned = false }) {
     id, kind, turn_id: turnId, style_only: true,
     presentation: turn.packet?.presentation || turn.input?.presentation || store.scene().presentation,
     actors: [...new Set((turn.packet?.npc_intents || []).map((i) => i.npc))],
-    created_at: at, ...(note ? { note } : {}), pinned, text: turn.output,
+    created_at: at, ...(note ? { note } : {}), pinned, text: turn.validation?.plain || turn.output,
   });
   writeJson(path.join(exemplarDir(store, kind), `${id}.json`), ex);
   return ex;

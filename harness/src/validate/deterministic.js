@@ -4,7 +4,7 @@
 import { schemas } from "../lib/schema.js";
 import { indexFacts, actorHolds, factAliases } from "../knowledge/ledger.js";
 import { formErrors } from "../form/pressure.js";
-import { parseSpans, quotedOutsideSpans, wordCount, stripSpans } from "../render/dialogue.js";
+import { parseSpans, quotedOutsideSpans, wordCount, stripSpans, quotedRuns } from "../render/dialogue.js";
 
 const NEW_REF = /^new:[a-z0-9_-]{1,40}$/;
 
@@ -198,6 +198,12 @@ export function validateNovelistOutput(prose, { packet, facts, actors, manifest,
   for (const e of spanErrors) E("annotation", e);
   const pcId = manifest.player.character;
   const allowed = new Set(packet.npc_intents.filter((i) => i.speaks !== false).map((i) => i.npc));
+  // Dialogue must be annotated: speaking intents exist, the draft contains quoted lines, but no
+  // speaker span at all. Without spans the speaker and PC-dialogue checks are vacuous.
+  if (spans.length === 0 && allowed.size > 0) {
+    const quotes = quotedRuns(prose).filter((q) => q.trim().split(/\s+/).length >= 2);
+    if (quotes.length) E("unannotated-dialogue", `${quotes.length} quoted line(s) but no ⟦say <id>⟧ spans; wrap every spoken line in a speaker span (quoted signs/documents excepted)`);
+  }
   for (const s of spans) {
     if (s.speaker === pcId) { if (!pcAllowedToSpeak) E("pc-dialogue", `player character ${pcId} voiced: "${s.text.slice(0, 80)}"`); continue; }
     if (!actors.actors[s.speaker]) E("unknown-speaker", `unknown speaker ${s.speaker}`);

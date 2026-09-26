@@ -20,6 +20,14 @@ test("quoted non-dialogue outside spans is allowed but long runs are surfaced as
   assert.equal(quotedOutsideSpans(SAMPLE, { minWords: 12 }).length, 0);
 });
 
+test("stripOocNotes removes whole (( … )) paragraphs and nothing else", async () => {
+  const { stripOocNotes, quotedRuns } = await import("../src/render/dialogue.js");
+  const r = stripOocNotes("Prose one.\n\n(( <NPC_A> waits for an answer. ))\n\nProse two (( not a whole note )).\n\n(( multi\nline note ))");
+  assert.equal(r.text, "Prose one.\n\nProse two (( not a whole note )).");
+  assert.equal(r.removed.length, 2);
+  assert.deepEqual(quotedRuns('a "b c" d “ef” “x”'), ["b c", "ef"], "single-character quotes are ignored");
+});
+
 test("malformed annotation is reported: unclosed, nested, stray close, bad id", () => {
   assert.match(parseSpans("⟦say npc_a⟧“x”").errors[0], /unclosed/);
   assert.match(parseSpans("⟦say npc_a⟧“x ⟦say npc_b⟧y⟦/say⟧”⟦/say⟧").errors[0], /nested/);

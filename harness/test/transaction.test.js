@@ -45,6 +45,22 @@ test("golden turn: received -> delivered, state committed once, output rendered 
   } finally { r.cleanup(); }
 });
 
+test("model-written OOC notes are stripped, so the harness stop line is never duplicated; recent prose shown to models carries no stop line", async () => {
+  const withNote = `${NOVELIST_PROSE}\n\n(( <NPC_A> is waiting for an answer. ))`;
+  const r = makeRunner({ responses: { director: [directorPacket(), directorPacket({ fact_proposals: [], knowledge_events: [], mind_deltas: [] })], novelist: [withNote, NOVELIST_PROSE], editor: [EDITOR_OK, EDITOR_OK] } });
+  try {
+    const res = await r.runner.run({ text: "x", eventId: "e1" });
+    assert.equal((res.output.match(/\(\( /g) || []).length, 1, "exactly one stop line");
+    assert.doesNotMatch(r.store.turn(res.turn.turn_id).validation.plain, /\(\(/);
+    await r.runner.run({ text: "y", eventId: "e2" });
+    const novelist2 = r.fake.calls.filter((c) => c.role === "novelist")[1];
+    assert.doesNotMatch(novelist2.user, /\(\( <NPC_A> is waiting/, "recent prose excludes the harness stop line");
+    assert.match(novelist2.user, /⟦say npc_a⟧/, "recent prose shows the annotation convention");
+    const director2 = r.fake.calls.filter((c) => c.role === "director")[1];
+    assert.doesNotMatch(director2.user, /⟦say/, "director sees plain prose");
+  } finally { r.cleanup(); }
+});
+
 test("duplicate event ids never create duplicate canonical turns; redelivery returns stored output", async () => {
   const r = makeRunner({ responses: ok() });
   try {

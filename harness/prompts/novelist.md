@@ -22,4 +22,4 @@ Use the actor id exactly as given. Do not wrap quoted signs, documents, remember
 
 ## Output
 
-Return the prose only. No headings, no notes, no JSON, no preamble. Length band: {{length_hint}}.
+Return the prose only. No headings, no notes, no JSON, no preamble, and no out-of-character lines such as `(( … ))`; the harness adds the player prompt itself. Every spoken line must be inside a speaker span; a draft with quoted dialogue and no spans is rejected. Length band: {{length_hint}}.

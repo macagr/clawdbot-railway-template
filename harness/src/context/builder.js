@@ -42,6 +42,16 @@ function onDemandHistory(store, needles, maxChars = 4000) {
   return hits;
 }
 
+/** Plain validated prose of a committed turn (never the rendered output with harness-added lines). */
+export function proseOf(turn) {
+  return turn.validation?.plain || turn.output || "";
+}
+
+/** The annotated draft (with ⟦say⟧ spans) of a committed turn, for the Novelist's continuity view. */
+export function annotatedProseOf(turn) {
+  return turn.revised || turn.draft || proseOf(turn);
+}
+
 function actorNames(actors, ids) {
   return ids.map((id) => { const a = actors.actors[id]; return a ? `${id} (${a.display_name}, ${a.kind}, ${a.tier})` : id; });
 }
@@ -112,7 +122,7 @@ export function buildDirectorContext(store, { input, turnId, env, formLedger }) 
     ["Open unresolved items", unresolved.map((u) => `- ${u.id}: ${u.question}`).join("\n")],
     ["Open candidate resolutions (non-canon)", candidates.map((c) => `- ${c.id} for ${c.fact}: ${c.proposal}${c.proposed_status ? ` (would set ${c.proposed_status})` : ""}`).join("\n")],
     ["Recent turns", recentTurns.map((t) => `- ${t.turn_id}: ${t.packet?.turn_summary || "(no summary)"}`).join("\n")],
-    ["Last prose", recentTurns.slice(-m.context.recent_prose_turns).map((t) => `--- ${t.turn_id}\n${t.output || ""}`).join("\n")],
+    ["Last prose", recentTurns.slice(-m.context.recent_prose_turns).map((t) => `--- ${t.turn_id}\n${proseOf(t)}`).join("\n")],
     ["Form dimensions", Object.entries(m.form.dimensions).map(([k, v]) => `- ${k}: ${v.join(" | ")}`).join("\n")],
     ["form_pressure (recency of use; higher = used more recently)", JSON.stringify(pressure, null, 2)],
     ["Available channels (for knowledge_events)", Object.entries(env.catalog.channels || {}).map(([k, v]) => `- ${k}: ${v.label} (delay ${v.delay}, fidelity ${v.fidelity}, evidence ${v.evidence})`).join("\n")],
@@ -166,7 +176,7 @@ export function buildNovelistContext(store, { packet, env, revisionNotes }) {
     ["What the player character currently holds (permitted view)", pcView.map((v) => `- ${v.content}`).join("\n")],
     ["Do not reveal", filtered.reveals_forbidden.map((x) => `- ${x}`).join("\n")],
     [`Voice cards. ${STYLE_ONLY_BANNER}`, voices.text],
-    ["Recent prose (continuity of rhythm only)", recent.map((t) => `--- ${t.turn_id}\n${t.output}`).join("\n")],
+    ["Recent prose (continuity of rhythm only; shown with speaker spans as you must write them)", recent.map((t) => `--- ${t.turn_id}\n${annotatedProseOf(t)}`).join("\n")],
     ["Exemplars", renderExemplars(exemplars, "good")],
     ["Novelist craft notes", renderCraft(craft)],
     ["Revision notes from the Editor", revisionNotes ? revisionNotes.map((n) => `- (${n.severity}) ${n.finding}${n.quote ? ` — "${n.quote}"` : ""}${n.suggestion ? ` → ${n.suggestion}` : ""}`).join("\n") : ""],

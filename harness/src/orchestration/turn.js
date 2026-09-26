@@ -13,6 +13,7 @@ import { loadCastingConfig, castActor, buildCastingContext, mergeCastingFields }
 import { buildPropagationContext, filterProposals } from "../propagation/propagation.js";
 import { materializeKnowledgeEvent } from "../knowledge/events.js";
 import { renderVoiceCard, resolveVoiceCard } from "../voices/voices.js";
+import { stripOocNotes } from "../render/dialogue.js";
 import { genericPrompt, fill, sections } from "../prompts/render.js";
 import { redact } from "../lib/redact.js";
 
@@ -221,7 +222,9 @@ export class TurnRunner {
     let last;
     for (let attempt = 0; attempt <= retries; attempt++) {
       const res = await this.#call("novelist", ctx, { turn });
-      const prose = res.text.trim();
+      const stripped = stripOocNotes(res.text.trim());
+      if (stripped.removed.length) this.log.warn(`[turn ${turn.turn_id}] removed ${stripped.removed.length} OOC note(s) from novelist output`);
+      const prose = stripped.text;
       const v = validateNovelistOutput(prose, { packet, facts: store.facts(), actors: env.actors, manifest: store.manifest, pcAllowedToSpeak: pcAllowed });
       if (v.ok) return { prose, validation: v };
       last = v;

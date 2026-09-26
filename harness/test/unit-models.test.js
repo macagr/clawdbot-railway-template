@@ -71,6 +71,13 @@ test("HttpModelAdapter maps OpenAI-compatible responses and errors", async () =>
   assert.throws(() => new HttpModelAdapter({ providerId: "p", baseUrl: "x", apiKeyEnv: "MISSING", env: {} }), /missing API key/);
 });
 
+test("openclaw agent envelope: usage is found under result.meta in common shapes", async () => {
+  const { findUsage } = await import("../src/models/openclaw-cli.js");
+  assert.deepEqual(findUsage({ usage: { inputTokens: 10, outputTokens: 5 } }), { input_tokens: 10, output_tokens: 5, cached_tokens: 0 });
+  assert.deepEqual(findUsage({ agentMeta: { usage: { input: 7, output: 3, cacheRead: 2 } } }), { input_tokens: 7, output_tokens: 3, cached_tokens: 2 });
+  assert.deepEqual(findUsage({ durationMs: 100 }), {});
+});
+
 test("openclaw agent JSON envelope: reply text is taken from payloads", () => {
   assert.equal(extractReplyText({ payloads: [{ text: "a" }, { text: "b" }] }), "a\nb");
   assert.equal(extractReplyText({ result: { payloads: ["c"] } }), "c");

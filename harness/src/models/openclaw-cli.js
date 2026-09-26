@@ -30,16 +30,18 @@ export class OpenClawCliAdapter {
       const data = parseJsonEnvelope(stdout);
       const text = extractReplyText(data);
       if (!text) throw new ModelError("openclaw agent returned no reply text", { code: "empty", retryable: true });
-      const u = data.usage || data.meta?.usage || data.result?.usage || data.summary?.usage || data.result?.meta?.usage || {};
-      const usage = {
+      const meta = data.result?.meta || data.meta || {};
+      const u = data.usage || data.result?.usage || data.summary?.usage || meta.usage || meta.tokens || meta.tokenUsage || {};
+      let usage = {
         input_tokens: num(u.input ?? u.input_tokens ?? u.inputTokens ?? u.prompt_tokens ?? u.promptTokens),
         output_tokens: num(u.output ?? u.output_tokens ?? u.outputTokens ?? u.completion_tokens ?? u.completionTokens),
         cached_tokens: num(u.cached ?? u.cached_tokens ?? u.cacheRead ?? u.cache_read_input_tokens ?? 0),
       };
-      const cost = [data.costUsd, data.meta?.costUsd, data.result?.costUsd, data.summary?.costUsd, u.costUsd].find((c) => typeof c === "number");
+      if (usage.input_tokens === 0 && usage.output_tokens === 0) usage = { ...usage, ...findUsage(meta) };
+      const cost = [data.costUsd, meta.costUsd, meta.cost, data.result?.costUsd, data.summary?.costUsd, u.costUsd].find((c) => typeof c === "number");
       if (usage.input_tokens === 0 && usage.output_tokens === 0) {
         const keysOf = (o) => (o && typeof o === "object" ? Object.keys(o).join(", ") : String(o));
-        this.log?.debug?.(`[openclaw-cli] no usage found; keys: top=[${keysOf(data)}] result=[${keysOf(data.result)}] summary=[${keysOf(data.summary)}] meta=[${keysOf(data.meta)}]`);
+        this.log?.debug?.(`[openclaw-cli] no usage found; keys: top=[${keysOf(data)}] result=[${keysOf(data.result)}] result.meta=[${keysOf(data.result?.meta)}] result.meta json=${JSON.stringify(data.result?.meta ?? null).slice(0, 600)}`);
       }
       return { text, usage, model: data.model || model || agentId, provider: "openclaw", cost_reported: cost };
     } finally {
@@ -49,6 +51,24 @@ export class OpenClawCliAdapter {
 }
 
 function num(v) { return Number.isFinite(v) ? v : 0; }
+
+/** Best-effort: find input/output token counts anywhere inside an envelope meta object (depth ≤ 3). */
+export function findUsage(obj, depth = 0) {
+  if (!obj || typeof obj !== "object" || depth > 3) return {};
+  let input = 0, output = 0, cached = 0;
+  for (const [k, v] of Object.entries(obj)) {
+    if (typeof v === "number") {
+      const key = k.toLowerCase();
+      if (/(^|_)(input|prompt)(_?tokens)?$/.test(key)) input = input || v;
+      else if (/(^|_)(output|completion)(_?tokens)?$/.test(key)) output = output || v;
+      else if (/cache(d|_?read)/.test(key)) cached = cached || v;
+    } else if (v && typeof v === "object") {
+      const nested = findUsage(v, depth + 1);
+      input = input || nested.input_tokens || 0; output = output || nested.output_tokens || 0; cached = cached || nested.cached_tokens || 0;
+    }
+  }
+  return input || output ? { input_tokens: input, output_tokens: output, cached_tokens: cached } : {};
+}
 
 function parseJsonEnvelope(stdout) {
   const trimmed = stdout.trim();

@@ -65,6 +65,31 @@ export function quotedOutsideSpans(text, { minWords = 6, markers = DEFAULT_MARKE
   return out;
 }
 
+/**
+ * Remove paragraphs that are entirely out-of-character notes, i.e. "(( ... ))". The harness adds
+ * its own stop line after validation; a model that imitates one would otherwise duplicate it.
+ * Returns { text, removed[] }.
+ */
+export function stripOocNotes(text) {
+  const removed = [];
+  const kept = [];
+  for (const para of String(text).split(/\n{2,}/)) {
+    const t = para.trim();
+    if (/^\(\([\s\S]*\)\)$/.test(t)) removed.push(t);
+    else kept.push(para);
+  }
+  return { text: kept.join("\n\n").trim(), removed };
+}
+
+/** Quoted runs (any length) anywhere in the text, used to detect un-annotated dialogue. */
+export function quotedRuns(text) {
+  const out = [];
+  const re = /[“"]([^”"]{2,}?)[”"]/g;
+  let m;
+  while ((m = re.exec(text))) out.push(m[1]);
+  return out;
+}
+
 export function wordCount(text) {
   return (text.trim().match(/\S+/g) || []).length;
 }

@@ -128,6 +128,22 @@ test("novelist output: speakers, PC dialogue, forbidden aliases, length, annotat
   } finally { cleanup(); }
 });
 
+test("un-annotated dialogue is rejected when NPCs speak; silent prose and quoted signs are fine", () => {
+  const { store, cleanup } = tempCampaign();
+  try {
+    const c = ctx(store), p = packet();
+    let r = validateNovelistOutput('He looked up. "You remembered it. Why." A pause.', { packet: p, ...c });
+    assert.ok(codes(r).includes("unannotated-dialogue"));
+    r = validateNovelistOutput("He looked up and said nothing. The kettle ticked.", { packet: p, ...c });
+    assert.deepEqual(r.errors, []);
+    r = validateNovelistOutput('The sign read “no credit”. ⟦say npc_a⟧“Sit.”⟦/say⟧', { packet: p, ...c });
+    assert.deepEqual(r.errors, []);
+    const silent = packet({ npc_intents: [{ npc: "npc_a", intent: "i", acting_on: ["fact_b"], emotional_register: "e", speech_acts: [], must_not_reveal: [], speaks: false }] });
+    r = validateNovelistOutput('A voice from the radio: "…and that is the news." He switched it off.', { packet: silent, ...c });
+    assert.deepEqual(r.errors, [], "no speaking intents: quotes are not treated as NPC dialogue");
+  } finally { cleanup(); }
+});
+
 test("npc decision: acting_on restricted to own holdings", () => {
   const { store, cleanup } = tempCampaign();
   try {
