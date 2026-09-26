@@ -38,7 +38,8 @@ export class TurnRunner {
   refreshEnv() { this.env = { actors: this.store.actors(), catalog: loadCatalog(this.store) }; return this.env; }
 
   /** Entry point. Returns { turn, output, reused } and never throws for model/validation failures. */
-  async run({ text, eventId, transport = "cli", player, presentation: forcedPresentation }) {
+  async run({ text, eventId, transport = "cli", player, presentation: forcedPresentation, nonCanon = null }) {
+    this.nonCanonLabel = nonCanon;
     const store = this.store;
     const idx = store.eventIndex();
     if (eventId && idx.events[eventId]) {
@@ -106,10 +107,10 @@ export class TurnRunner {
     const m = store.manifest;
     const env = this.refreshEnv();
     const scene = store.scene();
-    const canon = isCanonMode(m, scene.mode);
+    const canon = isCanonMode(m, scene.mode) && !this.nonCanonLabel;
     const at = () => this.clock.iso();
 
-    if (!canon) return this.#discussionTurn(turn, scene);
+    if (!canon) return this.#discussionTurn(turn, { ...scene, mode: this.nonCanonLabel || scene.mode });
 
     // ---- planned: Director ----
     const formLedger = store.formLedger();
