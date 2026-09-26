@@ -10,6 +10,9 @@
     "start": "node src/server.js",
     "lint": "node -c src/server.js",
     "test": "node --test",
+    "test:wrapper": "node --test test/",
+    "test:harness": "node --test \"harness/test/**/*.test.js\"",
+    "lint:generic": "node harness/src/cli.js lint-generic",
     "smoke": "node scripts/smoke.js"
   },
   "dependencies": {

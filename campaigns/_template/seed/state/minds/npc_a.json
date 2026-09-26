@@ -1,0 +1,10 @@
+{
+  "actor": "npc_a",
+  "revision": 0,
+  "dispositions": { "pc_fixture": { "stance": "curious, unconvinced", "trust": "low", "heat": "cool" } },
+  "priorities": [{ "goal": "find out whether <PC_ID> is useful", "weight": 0.8, "horizon": "scene" }],
+  "intentions": [{ "id": "int_a_test_pc", "what": "test <PC_ID> without openly threatening", "toward": "pc_fixture", "status": "held" }],
+  "suspicions": [],
+  "interpretations": [],
+  "emotional_baseline": { "register": "controlled", "volatility": "low" }
+}

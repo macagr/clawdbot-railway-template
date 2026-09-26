@@ -180,6 +180,14 @@ Later upgrades follow the same flow: back up → bump `OPENCLAW_VERSION` → dep
 - `GET /healthz` — wrapper + gateway reachability, `migrationRequired`, last gateway error (no auth, no secrets).
 - The gateway itself serves `/healthz`, `/startupz`, `/readyz` on loopback; the wrapper uses `/healthz` to detect readiness.
 
+## Narrative RPG harness (`rp`)
+
+The image also ships a generic, campaign-agnostic long-form roleplay harness at `/opt/rp-harness` (source in [harness/](harness/)). It runs one coordinator agent plus Director/Novelist/Editor specialists per campaign, keeps all canon in explicit files under `/data/workspaces/<CAMPAIGN_ID>`, enforces per-character knowledge boundaries in code, and saves to durable canon through n8n or a local directory. Campaign packages are separate (see [campaigns/_template/](campaigns/_template/)); no real campaign content is in this repository.
+
+- Docs: [harness/docs/README.md](harness/docs/README.md)
+- Setup: `rp campaign install …`, `rp setup-openclaw … --dry-run`, `rp smoke-test …`
+- Tests: `npm run test:harness`
+
 ## Support / community
 
 - GitHub Issues: https://github.com/vignesh07/clawdbot-railway-template/issues

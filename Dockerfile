@@ -39,6 +39,13 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 COPY src ./src
 
+# Narrative RPG harness (generic; campaign packages live on the volume under /data/workspaces).
+# Dependency-free Node code, invoked by campaign coordinator agents through `rp` (exec allowlist).
+COPY harness /opt/rp-harness
+RUN chmod 755 /opt/rp-harness/bin/rp \
+  && ln -sf /opt/rp-harness/bin/rp /usr/local/bin/rp
+ENV RP_HARNESS=/opt/rp-harness
+
 # The wrapper listens on $PORT (Railway injects it at runtime). Do not set a default PORT here.
 # Over Railway private networking the origin is http://<service>.railway.internal:8080.
 EXPOSE 8080

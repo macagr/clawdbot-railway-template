@@ -1,0 +1,32 @@
+{
+  "name": "rp-harness save (example, placeholders only)",
+  "nodes": [
+    { "parameters": { "httpMethod": "POST", "path": "rp/save", "responseMode": "responseNode", "options": {} }, "name": "Webhook /rp/save", "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [0, 0] },
+    { "parameters": { "jsCode": "const auth = $input.first().headers['authorization'] || '';\nif (auth !== `Bearer ${$env.RP_SAVE_TOKEN}`) { return [{ json: { _status: 401 } }]; }\nconst p = $input.first().body;\nfor (const k of ['save_id','campaign','source','expect','append','replace','events']) if (!(k in p)) return [{ json: { _status: 400, error: `missing ${k}` } }];\nreturn [{ json: p }];" }, "name": "Validate + auth", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [220, 0] },
+    { "parameters": { "operation": "lookup", "documentId": "<LEDGER_SHEET_ID>", "sheetName": "saves", "lookupColumn": "save_id", "lookupValue": "={{ $json.save_id }}" }, "name": "Ledger lookup (idempotency)", "type": "n8n-nodes-base.googleSheets", "typeVersion": 4, "position": [440, 0] },
+    { "parameters": { "conditions": { "string": [{ "value1": "={{ $json.save_id }}", "operation": "isNotEmpty" }] } }, "name": "Already applied?", "type": "n8n-nodes-base.if", "typeVersion": 1, "position": [660, 0] },
+    { "parameters": { "jsCode": "// Return the original result for duplicates\nconst row = $input.first().json; return [{ json: { ...JSON.parse(row.result), status: 'duplicate' } }];" }, "name": "Duplicate result", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [880, -160] },
+    { "parameters": { "operation": "read", "documentId": "<LEDGER_SHEET_ID>", "sheetName": "meta" }, "name": "Read canon_revision", "type": "n8n-nodes-base.googleSheets", "typeVersion": 4, "position": [880, 120] },
+    { "parameters": { "conditions": { "string": [{ "value1": "={{ String($('Validate + auth').item.json.expect.canon_revision) }}", "operation": "notEqual", "value2": "={{ String($json.canon_revision) }}" }] } }, "name": "Revision mismatch?", "type": "n8n-nodes-base.if", "typeVersion": 1, "position": [1100, 120] },
+    { "parameters": { "jsCode": "const p = $('Validate + auth').item.json; return [{ json: { save_id: p.save_id, status: 'rejected', applied: [], failed: [{ target: 'expect', error: 'canon revision mismatch' }], canon_revision: $json.canon_revision, message: 'sync first' } }];" }, "name": "Rejected", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [1320, 0] },
+    { "parameters": { "operation": "update", "documentId": "<STATE_DOC_ID>", "text": "={{ JSON.stringify($('Validate + auth').item.json.replace) }}" }, "name": "Write state (replace)", "type": "n8n-nodes-base.googleDocs", "typeVersion": 2, "position": [1320, 240] },
+    { "parameters": { "operation": "update", "documentId": "<CHRONICLE_DOC_ID>", "text": "={{ '\\n\\n## ' + $('Validate + auth').item.json.append.chronicle.heading + '\\n\\n' + $('Validate + auth').item.json.append.chronicle.markdown }}" }, "name": "Append chronicle", "type": "n8n-nodes-base.googleDocs", "typeVersion": 2, "position": [1540, 240] },
+    { "parameters": { "operation": "append", "documentId": "<LEDGER_SHEET_ID>", "sheetName": "saves", "columns": { "mappingMode": "defineBelow", "value": { "save_id": "={{ $('Validate + auth').item.json.save_id }}", "result": "={{ JSON.stringify({ save_id: $('Validate + auth').item.json.save_id, status: 'ok', applied: ['state', 'chronicle', 'audit'], failed: [], canon_revision: Number($('Read canon_revision').item.json.canon_revision) + 1 }) }}" } } }, "name": "Ledger append + bump revision", "type": "n8n-nodes-base.googleSheets", "typeVersion": 4, "position": [1760, 240] },
+    { "parameters": { "respondWith": "json", "responseBody": "={{ $json.result ? JSON.parse($json.result) : $json }}" }, "name": "Respond", "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1, "position": [1980, 120] }
+  ],
+  "connections": {
+    "Webhook /rp/save": { "main": [[{ "node": "Validate + auth", "type": "main", "index": 0 }]] },
+    "Validate + auth": { "main": [[{ "node": "Ledger lookup (idempotency)", "type": "main", "index": 0 }]] },
+    "Ledger lookup (idempotency)": { "main": [[{ "node": "Already applied?", "type": "main", "index": 0 }]] },
+    "Already applied?": { "main": [[{ "node": "Duplicate result", "type": "main", "index": 0 }], [{ "node": "Read canon_revision", "type": "main", "index": 0 }]] },
+    "Duplicate result": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] },
+    "Read canon_revision": { "main": [[{ "node": "Revision mismatch?", "type": "main", "index": 0 }]] },
+    "Revision mismatch?": { "main": [[{ "node": "Rejected", "type": "main", "index": 0 }], [{ "node": "Write state (replace)", "type": "main", "index": 0 }]] },
+    "Rejected": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] },
+    "Write state (replace)": { "main": [[{ "node": "Append chronicle", "type": "main", "index": 0 }]] },
+    "Append chronicle": { "main": [[{ "node": "Ledger append + bump revision", "type": "main", "index": 0 }]] },
+    "Ledger append + bump revision": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "meta": { "note": "Example only. Replace <LEDGER_SHEET_ID>, <STATE_DOC_ID>, <CHRONICLE_DOC_ID>; set RP_SAVE_TOKEN in n8n env; add a sibling GET /rp/canon workflow returning the sync-manifest. Partial-failure handling (per-target ledger) is left to the operator." }
+}

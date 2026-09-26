@@ -1,0 +1,23 @@
+{
+  "axes": {
+    "rhythm": { "values": ["clipped", "flowing", "halting", "rapid"] },
+    "register": { "values": ["formal", "plain", "coarse", "ornate"] },
+    "humor": { "values": ["none", "dry", "broad", "cruel"] },
+    "gear": { "values": ["calm", "anxious", "irritable", "cheerful"] },
+    "tell": { "values": ["repeats last word", "never uses names", "counts things", "over-apologizes"] },
+    "status": { "values": ["defers", "levels", "presses"] },
+    "age_band": { "values": ["young", "middle", "old"], "constrained_by": "age_band" }
+  },
+  "names": {
+    "pools": {
+      "pool_a": ["Name Alpha", "Name Beta", "Name Gamma", "Name Delta"],
+      "pool_b": ["Name Epsilon", "Name Zeta", "Name Eta"]
+    },
+    "pool_by_constraint": { "group_a": "pool_a" },
+    "default_pool": "pool_b"
+  },
+  "archetypes": {
+    "functionary": { "register": "formal", "status": "defers" }
+  },
+  "voice_defaults": "generic"
+}

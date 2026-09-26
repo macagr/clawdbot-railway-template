@@ -1,0 +1,8 @@
+{
+  "actors": {
+    "pc_fixture": { "id": "pc_fixture", "kind": "pc", "tier": "major", "display_name": "<PC_ID>", "aliases": ["the player character"] },
+    "npc_a": { "id": "npc_a", "kind": "npc", "tier": "major", "display_name": "<NPC_A>", "aliases": ["A"], "groups": [{ "group": "group_a", "role": "officer" }] },
+    "npc_b": { "id": "npc_b", "kind": "npc", "tier": "minor", "display_name": "<NPC_B>", "aliases": ["B"] },
+    "group_a": { "id": "group_a", "kind": "group", "tier": "major", "display_name": "<GROUP_A>" }
+  }
+}

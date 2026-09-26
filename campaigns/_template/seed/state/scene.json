@@ -1,0 +1,11 @@
+{
+  "scene_id": "scene_seed",
+  "location": "location_a",
+  "time": "day 1, morning",
+  "clock": 0,
+  "present": ["pc_fixture"],
+  "mode": "play",
+  "presentation": "scene",
+  "active_plots": ["plot_a"],
+  "summary": "<PC_ID> alone at <LOCATION_A>; <NPC_A> expected."
+}

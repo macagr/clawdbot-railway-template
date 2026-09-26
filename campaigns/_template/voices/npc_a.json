@@ -1,0 +1,15 @@
+{
+  "id": "npc_a",
+  "style_only": true,
+  "display_name": "<NPC_A>",
+  "rhythm": "Short declaratives; pauses before anything that matters.",
+  "register": "Plain, formal with superiors, dry with equals.",
+  "vocabulary": "Concrete nouns. Avoids abstractions.",
+  "sentences": "Rarely more than twelve words. Questions are statements with a lift.",
+  "humor": "Deadpan; never laughs at own lines.",
+  "stress": { "anger": "Goes quieter, not louder.", "fear": "Over-precise about small things.", "affection": "Practical help instead of words." },
+  "status_modulation": { "superior": "Adds honorific, shortens replies.", "subordinate": "Instructions, no explanations." },
+  "does_not_sound_like": ["A lecturer.", "Anyone who explains their feelings."],
+  "examples": ["“You remembered it. Why.”", "“Sit. This takes a minute.”", "“That is not what I asked.”"],
+  "notes": "Example lines are style samples only, never facts about what <NPC_A> has said in play."
+}

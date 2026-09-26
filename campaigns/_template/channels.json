@@ -1,0 +1,23 @@
+{
+  "channels": {
+    "face_to_face": { "label": "Face to face", "delay": 0, "fidelity": "accurate", "evidence": "witnessed", "reliability": 1, "belief": "high" },
+    "channel_a": { "label": "<CHANNEL_A> (direct message)", "delay": 1, "fidelity": "accurate", "evidence": "testimony", "reliability": 0.9, "belief": "medium" },
+    "channel_rumor": { "label": "Rumor", "delay": 2, "fidelity": "distorted", "evidence": "hearsay", "reliability": 0.6, "belief": "low", "access": [] },
+    "channel_report": { "label": "Internal report", "delay": 1, "fidelity": "partial", "evidence": "documentary", "reliability": 1, "belief": "high", "access": ["group_a"] }
+  },
+  "scopes": {
+    "scope_a": { "group": "group_a", "roles": ["officer"] }
+  },
+  "rules": [
+    {
+      "id": "rule_public_to_group_a",
+      "when": { "fact_tags": ["public_incident"] },
+      "channel": "channel_report",
+      "to": { "type": "group", "id": "group_a", "scope": "scope_a" },
+      "delay": 1,
+      "fidelity": "partial",
+      "succeeded": true,
+      "believed": true
+    }
+  ]
+}
