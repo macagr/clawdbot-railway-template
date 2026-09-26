@@ -99,5 +99,9 @@ test("usage meter: cost estimate from role prices, caps enforced, warnings below
     const u2 = recordUsage(store.usage(), store.manifest, { at, role: "novelist", model: "x", usage: { input_tokens: 1, output_tokens: 1 }, cost_reported: 0.42 });
     assert.equal(u2.totals.cost, 0.42);
     assert.equal(u2.calls[0].estimated, false);
+    // a reported 0 with real tokens is "unpriced": use the role-price estimate instead
+    const u3 = recordUsage(store.usage(), store.manifest, { at, role: "novelist", model: "x", usage: { input_tokens: 1_000_000, output_tokens: 0 }, cost_reported: 0 });
+    assert.ok(Math.abs(u3.totals.cost - 1) < 1e-9);
+    assert.equal(u3.calls[0].estimated, false, "priced from configured role prices");
   } finally { cleanup(); }
 });
