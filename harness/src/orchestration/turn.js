@@ -202,7 +202,9 @@ export class TurnRunner {
     let ctx = dctx;
     let last;
     for (let attempt = 0; attempt < 2; attempt++) {
-      const res = await this.#call("director", ctx, { schema: "director-packet", turn, normalize: normalizeDirectorPacket });
+      const notes = [];
+      const res = await this.#call("director", ctx, { schema: "director-packet", turn, normalize: (j) => normalizeDirectorPacket(j, notes) });
+      if (notes.length) this.log.warn(`[turn ${turn.turn_id}] director packet normalized: ${notes.join(" | ")}`);
       const packet = res.json;
       const v = validateDirectorPacket(packet, { facts: store.facts(), actors: env.actors, catalog: env.catalog, manifest: store.manifest, scene });
       if (v.ok) { if (v.warnings.length) this.log.warn(`[turn ${turn.turn_id}] director warnings: ${formatIssues({ errors: [], warnings: v.warnings })}`); return { ...packet, presentation: packet.presentation || scene.presentation, mode: scene.mode }; }

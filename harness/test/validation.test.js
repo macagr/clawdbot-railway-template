@@ -29,6 +29,35 @@ test("normalizeDirectorPacket drops echoed scene state and fills defaults; other
   } finally { cleanup(); }
 });
 
+test("normalizeDirectorPacket coerces mind-delta variants and drops the unrecoverable ones with notes", async () => {
+  const { normalizeDirectorPacket } = await import("../src/validate/deterministic.js");
+  const notes = [];
+  const n = normalizeDirectorPacket(packet({ mind_deltas: [
+    { actor: "npc_a", intentions_add: ["press the question", { text: "watch the door", weight: 0.4, scope: "scene" }], suspicions_add: ["<PC_ID> is hiding something"], dispositions: { toward_pc_fixture: "wary" } },
+    { actor: "npc_a", intentions_add: [{ weight: 1 }] },
+    "not an object",
+  ] }), notes);
+  assert.equal(n.mind_deltas.length, 2, JSON.stringify(notes));
+  const d = n.mind_deltas[0];
+  assert.deepEqual(d.intentions_add.map((i) => i.what), ["press the question", "watch the door"]);
+  assert.ok(d.intentions_add.every((i) => i.id && i.status === "held"));
+  assert.equal(d.suspicions_add[0].confidence, "medium");
+  assert.equal(d.dispositions.pc_fixture.stance, "wary");
+  assert.equal(n.mind_deltas[1].intentions_add.length, 0, "unrecoverable item filtered, delta kept");
+  assert.ok(notes.some((x) => /mind_deltas\[2\] dropped/.test(x)));
+  const { store, cleanup } = tempCampaign();
+  try { assert.deepEqual(validateDirectorPacket(n, ctx(store)).errors, []); } finally { cleanup(); }
+});
+
+test("acting_on and reveals accept new:<ref> fact refs at the schema level", () => {
+  const { store, cleanup } = tempCampaign();
+  try {
+    const p = packet({ fact_proposals: [{ ref: "new:x", content: "c" }], knowledge_events: [{ kind: "observe", fact: "new:x", to: { type: "actor", id: "npc_a" }, channel: "face_to_face" }],
+      npc_intents: [{ npc: "npc_a", intent: "i", acting_on: ["fact_b", "new:x"], emotional_register: "e", speech_acts: [], must_not_reveal: ["new:x"] }], reveals_forbidden: ["fact_b", "new:x"] });
+    assert.deepEqual(validateDirectorPacket(p, ctx(store)).errors, []);
+  } finally { cleanup(); }
+});
+
 test("valid packet passes", () => {
   const { store, cleanup } = tempCampaign();
   try { const r = validateDirectorPacket(packet(), ctx(store)); assert.deepEqual(r.errors, [], JSON.stringify(r)); } finally { cleanup(); }

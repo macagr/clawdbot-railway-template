@@ -14,17 +14,88 @@ export function isNewRef(ref) { return NEW_REF.test(ref || ""); }
 // are dropped before schema validation instead of failing the turn. Everything else stays strict.
 const SCENE_ECHO_KEYS = ["scene_id", "clock", "mode", "presentation", "presentation_forced", "active_plots", "summary", "extensions", "present_detail"];
 
-export function normalizeDirectorPacket(packet) {
+/**
+ * Normalize a raw Director packet before schema validation. `notes` collects what was changed
+ * or dropped so the runner can log it. Mind deltas are supplementary: obvious variants are
+ * coerced and deltas that remain invalid are dropped (never failing the turn for them).
+ */
+export function normalizeDirectorPacket(packet, notes = []) {
   if (!packet || typeof packet !== "object") return packet;
   const out = { ...packet };
   if (out.scene && typeof out.scene === "object") {
     const scene = { ...out.scene };
-    for (const k of SCENE_ECHO_KEYS) delete scene[k];
+    for (const k of SCENE_ECHO_KEYS) if (k in scene) { delete scene[k]; notes.push(`scene.${k} dropped (code-owned)`); }
     if (!Array.isArray(scene.beats)) scene.beats = [];
     out.scene = scene;
   }
   for (const k of ["reveals_allowed", "reveals_forbidden", "npc_intents"]) if (out[k] == null) out[k] = [];
   if (typeof out.stop_for_player !== "boolean") out.stop_for_player = Boolean(out.stop_for_player);
+  if (Array.isArray(out.mind_deltas)) {
+    const kept = [];
+    out.mind_deltas.forEach((d, i) => {
+      const n = normalizeMindDelta(d);
+      const errs = n ? schemas.errors("mind-delta", n) : ["not an object"];
+      if (errs.length) notes.push(`mind_deltas[${i}] dropped: ${errs.slice(0, 3).join("; ")}`);
+      else kept.push(n);
+    });
+    out.mind_deltas = kept;
+  }
+  return out;
+}
+
+const INTENT_ALIASES = { text: "what", description: "what", intent: "what", goal: "what", target: "toward" };
+const SUSPICION_ALIASES = { text: "hypothesis", suspicion: "hypothesis", subject: "about" };
+const INTERP_ALIASES = { text: "reading", interpretation: "reading", event: "of", fact: "of" };
+
+function normalizeMindDelta(d) {
+  if (!d || typeof d !== "object" || !d.actor) return null;
+  const out = { actor: d.actor };
+  const slugify = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 48) || "intent";
+  const objectify = (item, aliases, textKey, extra) => {
+    if (typeof item === "string") return { [textKey]: item, ...extra };
+    if (!item || typeof item !== "object") return null;
+    const o = {};
+    for (const [k, v] of Object.entries(item)) o[aliases[k] || k] = v;
+    return { ...extra, ...o };
+  };
+  if (d.intentions_add) out.intentions_add = [].concat(d.intentions_add).map((it) => {
+    const o = objectify(it, INTENT_ALIASES, "what", { status: "held" });
+    if (!o) return null;
+    const keep = { id: o.id || `int_${slugify(o.what || "")}`, what: o.what, status: ["held", "active", "done", "abandoned"].includes(o.status) ? o.status : "held" };
+    if (o.toward) keep.toward = o.toward; if (o.trigger) keep.trigger = o.trigger; if (o.since_turn) keep.since_turn = o.since_turn;
+    return keep;
+  }).filter((x) => x && x.what);
+  if (d.intentions_update) out.intentions_update = [].concat(d.intentions_update).map((u) => (u && typeof u === "object" && u.id && u.status ? { id: u.id, status: u.status } : null)).filter(Boolean);
+  if (d.suspicions_add) out.suspicions_add = [].concat(d.suspicions_add).map((s) => {
+    const o = objectify(s, SUSPICION_ALIASES, "hypothesis", { confidence: "medium" });
+    if (!o || !o.hypothesis) return null;
+    const keep = { hypothesis: o.hypothesis, confidence: ["low", "medium", "high"].includes(o.confidence) ? o.confidence : "medium" };
+    if (o.about) keep.about = String(o.about);
+    return keep;
+  }).filter(Boolean);
+  if (d.suspicions_clear) out.suspicions_clear = [].concat(d.suspicions_clear).map(String);
+  if (d.interpretations_add) out.interpretations_add = [].concat(d.interpretations_add).map((it) => {
+    const o = objectify(it, INTERP_ALIASES, "reading", {});
+    if (!o || !o.reading) return null;
+    const keep = { of: String(o.of || "unspecified"), reading: o.reading };
+    if (typeof o.unresolved === "boolean") keep.unresolved = o.unresolved;
+    return keep;
+  }).filter(Boolean);
+  if (d.dispositions && typeof d.dispositions === "object") {
+    out.dispositions = {};
+    for (const [k, v] of Object.entries(d.dispositions)) {
+      const key = k.replace(/^toward[_ ]/, "");
+      const o = typeof v === "string" ? { stance: v } : (v && typeof v === "object" ? v : null);
+      if (!o || !o.stance) continue;
+      const keep = { stance: o.stance };
+      if (["low", "medium", "high"].includes(o.trust)) keep.trust = o.trust;
+      if (["cold", "cool", "warm", "hot"].includes(o.heat)) keep.heat = o.heat;
+      out.dispositions[key] = keep;
+    }
+  }
+  if (d.priorities_set) out.priorities_set = [].concat(d.priorities_set).map((p) => (p && typeof p === "object" && p.goal ? { goal: p.goal, weight: typeof p.weight === "number" ? Math.min(1, Math.max(0, p.weight)) : 0.5, ...(p.horizon ? { horizon: p.horizon } : {}) } : null)).filter(Boolean);
+  if (d.emotional_baseline && typeof d.emotional_baseline === "object") out.emotional_baseline = d.emotional_baseline;
+  if (d.extensions && typeof d.extensions === "object") out.extensions = d.extensions;
   return out;
 }
 

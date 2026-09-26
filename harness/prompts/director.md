@@ -42,7 +42,12 @@ Return ONLY a JSON object with exactly this shape (no extra keys anywhere; omit 
                     "relationships": [ { "from": "<id>", "to": "<id>", "stance": "…", "trust": "low|medium|high", "history_add": "…" } ],
                     "unresolved": [ { "op": "add|resolve|drop", "id": "…", "question": "…", "actors": [] } ],
                     "actors": [ { "op": "appearance|promote|retire", "id": "<id>", "tier": "…" }, { "op": "cast", "casting_request": { "ref": "new:<slug>", "role": "…", "returning": false, "constraints": {} } } ] },
-  "mind_deltas": [ { "actor": "<npc id>", "intentions_add": [], "intentions_update": [], "suspicions_add": [], "interpretations_add": [], "dispositions": {} } ],
+  "mind_deltas": [ { "actor": "<npc id>",
+                     "intentions_add": [ { "id": "int_<slug>", "what": "…", "status": "held|active", "toward": "<actor id, optional>", "trigger": "optional" } ],
+                     "intentions_update": [ { "id": "<existing intention id>", "status": "held|active|done|abandoned" } ],
+                     "suspicions_add": [ { "about": "<fact or event id, optional>", "hypothesis": "…", "confidence": "low|medium|high" } ],
+                     "interpretations_add": [ { "of": "<fact or event id>", "reading": "…", "unresolved": true } ],
+                     "dispositions": { "<actor id>": { "stance": "…", "trust": "low|medium|high", "heat": "cold|cool|warm|hot" } } } ],
   "stop_for_player": true,
   "stop_reason": "why the player must act now",
   "novelist_notes": "…"

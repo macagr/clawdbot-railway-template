@@ -4,6 +4,8 @@
   "$defs": {
     "actorRef": { "type": "string", "pattern": "^([a-z][a-z0-9_-]{0,63}|new:[a-z0-9_-]{1,40})$", "description": "actor id, or new:<ref> for an actor cast in this packet" },
     "actorRefList": { "type": "array", "items": { "$ref": "#/$defs/actorRef" }, "uniqueItems": true },
+    "factRef": { "type": "string", "pattern": "^([a-z][a-z0-9_-]{0,63}|new:[a-z0-9_-]{1,40})$", "description": "fact id, or new:<ref> for a fact proposed in this packet" },
+    "factRefList": { "type": "array", "items": { "$ref": "#/$defs/factRef" }, "uniqueItems": true },
     "form": {
       "type": "object",
       "additionalProperties": false,
@@ -34,10 +36,10 @@
       "properties": {
         "npc": { "$ref": "#/$defs/actorRef" },
         "intent": { "$ref": "common.json#/$defs/shortText" },
-        "acting_on": { "$ref": "common.json#/$defs/idList" },
+        "acting_on": { "$ref": "#/$defs/factRefList" },
         "emotional_register": { "$ref": "common.json#/$defs/shortText" },
         "speech_acts": { "type": "array", "items": { "$ref": "#/$defs/speechAct" }, "maxItems": 12 },
-        "must_not_reveal": { "$ref": "common.json#/$defs/idList" },
+        "must_not_reveal": { "$ref": "#/$defs/factRefList" },
         "speaks": { "type": "boolean" },
         "decision_source": { "enum": ["director", "npc_call"] }
       }
@@ -219,8 +221,8 @@
     "knowledge_events": { "type": "array", "items": { "$ref": "#/$defs/knowledgeEventProposal" }, "maxItems": 40 },
     "resolution_events": { "type": "array", "items": { "$ref": "#/$defs/resolutionEventProposal" }, "maxItems": 20 },
     "candidate_updates": { "type": "array", "items": { "$ref": "#/$defs/candidateUpdate" }, "maxItems": 20 },
-    "reveals_allowed": { "type": "array", "items": { "type": "string", "maxLength": 80 } },
-    "reveals_forbidden": { "type": "array", "items": { "type": "string", "maxLength": 80 } },
+    "reveals_allowed": { "type": "array", "items": { "$ref": "#/$defs/factRef" } },
+    "reveals_forbidden": { "type": "array", "items": { "$ref": "#/$defs/factRef" } },
     "uncertainty": { "type": "array", "items": { "$ref": "common.json#/$defs/shortText" }, "maxItems": 20 },
     "consequences": { "type": "array", "items": { "$ref": "#/$defs/consequence" }, "maxItems": 20 },
     "state_deltas": { "$ref": "#/$defs/stateDeltas" },
