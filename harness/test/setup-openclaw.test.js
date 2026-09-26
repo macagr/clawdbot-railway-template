@@ -3,7 +3,11 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import childProcess from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { makeRunner } from "./runner-helpers.js";
+import { FIXTURE_DIR } from "./helpers.js";
+import { CampaignStore } from "../src/state/store.js";
 import { openclawConfigFor, configSetOps, writeWorkspaces, applyConfig, approvalOps, mergeBindings, readCurrentConfig, ALLOWED_CONFIG_KEY_PATTERNS } from "../src/openclaw/setup.js";
 
 test("openclaw config: one coordinator + specialists, explicit ownership, Discord binding, tool and command policies", () => {
@@ -128,7 +132,12 @@ test("workspaces: coordinator AGENTS.md relays only; specialists get self-contai
   try {
     const written = writeWorkspaces(r.store, { workspacesRoot: path.join(r.dir, "..", `ws-${path.basename(r.dir)}`), transport: "discord" });
     const coord = fs.readFileSync(path.join(r.dir, "AGENTS.md"), "utf8");
-    assert.match(coord, /rp turn --campaign campaign_fixture --transport discord/);
+    // --campaign is a directory: the coordinator runs from its workspace, so the absolute root is required
+    const root = path.resolve(r.dir);
+    assert.ok(coord.includes(`rp turn --campaign ${root} --transport discord`), "rp turn uses the absolute campaign root");
+    assert.ok(coord.includes(`rp command --campaign ${root} --transport discord`), "rp command uses the absolute campaign root");
+    assert.ok(!coord.includes("--campaign campaign_fixture "), "never a bare campaign id");
+    assert.ok(!coord.includes(path.join(root, "campaign_fixture")), "no <campaign>/<campaign> path");
     assert.match(coord, /Never read, quote, or reason about files/);
     assert.match(coord, /`!status`/, "coordinator instructions use the Discord command prefix");
     assert.doesNotMatch(coord, /`\/status`/);
@@ -143,6 +152,34 @@ test("workspaces: coordinator AGENTS.md relays only; specialists get self-contai
     for (const f of ["IDENTITY.md", "SOUL.md", "USER.md"]) assert.ok(fs.readFileSync(path.join(dir, f), "utf8").length < 200, `${f} is minimal`);
     fs.rmSync(path.dirname(dir), { recursive: true, force: true });
   } finally { r.cleanup(); }
+});
+
+test("coordinator AGENTS: custom workspace root renders its own absolute path; the generated invocation resolves campaign.json from inside the workspace", () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "rp-custom root-"));
+  try {
+    const custom = path.join(base, "my workspaces", "campaign_fixture");
+    fs.cpSync(FIXTURE_DIR, custom, { recursive: true });
+    const store = CampaignStore.init(custom);
+    writeWorkspaces(store, { workspacesRoot: path.dirname(custom), transport: "discord" });
+    const coord = fs.readFileSync(path.join(custom, "AGENTS.md"), "utf8");
+    const turnLine = coord.split("\n").find((l) => l.includes("rp turn --campaign"));
+    const cmdLine = coord.split("\n").find((l) => l.includes("rp command --campaign"));
+    const campaignArg = (line) => line.match(/--campaign (.*?) --transport/)[1];
+    assert.equal(campaignArg(turnLine), path.resolve(custom));
+    assert.equal(campaignArg(cmdLine), path.resolve(custom));
+    assert.ok(!coord.includes("/data/workspaces"), "custom root: nothing hard-coded");
+    assert.ok(!coord.includes(path.join(custom, "campaign_fixture")), "no duplicated <campaign>/<campaign> segment");
+    // Simulate the coordinator: exec from inside the workspace with the generated --campaign value.
+    const CLI = fileURLToPath(new URL("../src/cli.js", import.meta.url));
+    const r = childProcess.spawnSync(process.execPath, [CLI, "command", "--campaign", campaignArg(cmdLine), "--transport", "discord", "--", "!status"], { cwd: custom, encoding: "utf8", env: { ...process.env, RP_LOG_LEVEL: "silent" } });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /revision 0/);
+    assert.doesNotMatch(r.stderr, /ENOENT/);
+    // The old bare-id form is exactly the production failure: it must fail with the doubled path.
+    const bad = childProcess.spawnSync(process.execPath, [CLI, "command", "--campaign", "campaign_fixture", "--", "/status"], { cwd: custom, encoding: "utf8", env: { ...process.env, RP_LOG_LEVEL: "silent" } });
+    assert.notEqual(bad.status, 0);
+    assert.match(bad.stderr, /campaign_fixture[\\/]campaign_fixture[\\/]campaign\.json/);
+  } finally { fs.rmSync(base, { recursive: true, force: true }); }
 });
 
 test("applyConfig: dry run prints config and approval commands; config failure aborts; approval failure yields an operator instruction, never a broader policy", async () => {

@@ -155,7 +155,10 @@ export function writeWorkspaces(store, { workspacesRoot, transport = "discord" }
   const written = [];
   const coord = path.join(store.root, "AGENTS.md");
   const command_prefix = transport === "discord" ? discordCommandPrefix(m) : "/";
-  writeFileAtomic(coord, fill(genericPrompt("coordinator-AGENTS"), { campaign_id: m.id, transport, command_prefix }));
+  // --campaign takes a directory. OpenClaw runs the coordinator from its workspace (= store.root),
+  // so a bare campaign id would resolve to <root>/<id>/campaign.json; always pass the absolute root.
+  const campaign_root = path.resolve(store.root);
+  writeFileAtomic(coord, fill(genericPrompt("coordinator-AGENTS"), { campaign_id: m.id, campaign_root, transport, command_prefix }));
   written.push(coord);
   const soul = path.join(store.root, "SOUL.md");
   if (!exists(soul)) { writeFileAtomic(soul, `Coordinator for ${m.display_name}. Relay only. No narration, no opinions about the fiction.\n`); written.push(soul); }
