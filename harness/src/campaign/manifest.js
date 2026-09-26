@@ -74,5 +74,17 @@ export function loadManifest(root) {
 export function roleConfig(manifest, role) {
   const r = manifest.roles?.[role];
   if (!r) throw new Error(`campaign.json: no model configured for role '${role}'`);
-  return { agent_id: `${manifest.id}-${role}`, timeout_ms: 120000, ...r };
+  return { timeout_ms: 120000, ...r };
+}
+
+/**
+ * OpenClaw agent id for a role: explicit roles.<role>.agent_id, else the id embedded in an
+ * "openclaw:<id>" model ref, else the conventional <campaign>-<role>.
+ */
+export function agentIdFor(manifest, role, modelRef) {
+  const r = manifest.roles?.[role] || {};
+  if (r.agent_id) return r.agent_id;
+  const ref = modelRef || r.model || "";
+  if (ref.startsWith("openclaw:")) return ref.slice("openclaw:".length);
+  return `${manifest.id}-${role}`;
 }

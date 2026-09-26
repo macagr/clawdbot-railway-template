@@ -5,6 +5,7 @@ import childProcess from "node:child_process";
 import path from "node:path";
 import { ensureDir, writeFileAtomic, exists } from "../lib/fsx.js";
 import { genericPrompt, fill } from "../prompts/render.js";
+import { agentIdFor } from "../campaign/manifest.js";
 
 export const SPECIALIST_ROLES = ["director", "novelist", "editor"];
 
@@ -25,7 +26,9 @@ export function openclawConfigFor(store, { rpBin = "/opt/rp-harness/bin/rp", wor
   for (const role of SPECIALIST_ROLES) {
     const rc = m.roles[role];
     if (!rc) continue;
-    const agentId = rc.agent_id || `${id}-${role}`;
+    const agentId = agentIdFor(m, role);
+    // Roles pointed at an existing agent (openclaw:<id>) are not (re)configured here.
+    if (rc.model?.startsWith("openclaw:") && !rc.agent_id && agentId !== `${id}-${role}`) continue;
     entries[agentId] = {
       workspace: path.join(root, `${id}-${role}`),
       ...(rc.model && !rc.model.startsWith("fake/") && !rc.model.startsWith("openclaw:") ? { model: rc.model } : {}),

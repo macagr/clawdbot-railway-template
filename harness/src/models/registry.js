@@ -11,7 +11,7 @@ import { schemas } from "../lib/schema.js";
 import { FakeModelAdapter, ModelError, extractJson } from "./adapter.js";
 import { HttpModelAdapter } from "./http.js";
 import { OpenClawCliAdapter } from "./openclaw-cli.js";
-import { roleConfig } from "../campaign/manifest.js";
+import { roleConfig, agentIdFor } from "../campaign/manifest.js";
 
 const DEFAULT_MODELS_CONFIG = fileURLToPath(new URL("../../config/models.json", import.meta.url));
 
@@ -98,7 +98,7 @@ export class RoleCaller {
             role, model: target.model, system, user: userText, schema,
             temperature: target.settings.temperature, maxTokens: target.settings.max_tokens,
             timeoutMs: target.settings.timeout_ms, reasoning: target.settings.reasoning,
-            sessionKey, agentId: agentId || target.rc.agent_id || target.model.replace(/^openclaw:/, ""),
+            sessionKey, agentId: agentId || agentIdFor(this.manifest, role, target.model),
           });
           this.onUsage({ role, model: `${target.provider}/${target.model}`, usage: res.usage, turn, cost_reported: res.cost_reported });
           if (!schema) return { ...res, role };

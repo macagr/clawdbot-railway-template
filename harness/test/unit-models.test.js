@@ -45,6 +45,15 @@ test("RoleCaller validates schema output, retries once with errors, then falls b
   } finally { cleanup(); }
 });
 
+test("openclaw agent id precedence: explicit agent_id > openclaw:<id> ref > <campaign>-<role>", async () => {
+  const { agentIdFor } = await import("../src/campaign/manifest.js");
+  const m = { id: "campaign_x", roles: { director: { model: "openclaw:main" }, novelist: { model: "openclaw:main", agent_id: "custom" }, editor: { model: "openrouter/v/m" } } };
+  assert.equal(agentIdFor(m, "director"), "main");
+  assert.equal(agentIdFor(m, "novelist"), "custom");
+  assert.equal(agentIdFor(m, "editor"), "campaign_x-editor");
+  assert.equal(agentIdFor(m, "npc", "openclaw:other"), "other");
+});
+
 test("HttpModelAdapter maps OpenAI-compatible responses and errors", async () => {
   const calls = [];
   const fetchImpl = async (url, init) => {
