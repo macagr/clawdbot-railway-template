@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# rp launcher: resolves the harness directory relative to this script.
+set -euo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+exec node "$DIR/src/cli.js" "$@"
