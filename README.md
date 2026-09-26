@@ -16,7 +16,7 @@ This fork runs the **official prebuilt OpenClaw image** (pinned to `2026.9.5`) a
 ## How it works (high level)
 
 - The image is `ghcr.io/openclaw/openclaw:<version>` plus a small Node wrapper (`src/server.js`).
-- The wrapper protects `/setup` (and the Control UI at `/openclaw`) with `SETUP_PASSWORD` using HTTP Basic auth.
+- The wrapper protects the `/setup` admin surface (page, APIs, backup export/import, config editor, debug console) with `SETUP_PASSWORD` using HTTP Basic auth. The proxied Control UI is **not** behind Basic auth (see Security boundaries).
 - During setup, the wrapper runs `openclaw onboard --non-interactive ...` inside the container, writes state to the volume, and then starts the gateway on loopback (`127.0.0.1:18789`).
 - After setup, **`/` is OpenClaw**. The wrapper reverse-proxies all traffic (including WebSockets) to the local gateway process.
 - The wrapper listens on `$PORT` and binds dual-stack (`::`), so it is reachable over Railway private networking as well as a public domain.
@@ -31,7 +31,23 @@ Internet → Cloudflare Access (MFA) → Cloudflare Tunnel → cloudflared servi
 - The OpenClaw service needs **no public Railway domain**. Point the tunnel's origin at `http://<service>.railway.internal:8080` (plain HTTP; TLS terminates at Cloudflare).
 - Railway private networking is IPv6-only on legacy environments; the wrapper binds `::` so this works either way. Set `HOST=0.0.0.0` only if you deploy somewhere without IPv6.
 - Set `OPENCLAW_PUBLIC_ORIGIN` to the HTTPS origin users open in the browser (e.g. `https://openclaw.example.com`). The wrapper writes it to `gateway.publicOrigin`, which the gateway uses for the Control UI websocket **Origin check**. Without it the Control UI may fail to connect behind the proxy.
-- `/healthz` and `/hooks/*` bypass Basic auth by design. Behind Cloudflare Access they are still gated by Access unless you add a bypass rule.
+## Security boundaries
+
+Three layers, each with one job:
+
+| Layer | Protects | Mechanism |
+|---|---|---|
+| Cloudflare Access | the whole public hostname | MFA / YubiKey policy at the edge; nothing reaches Railway without passing it |
+| `SETUP_PASSWORD` (HTTP Basic) | `/setup` and every `/setup/*` route (wizard, debug console, config editor, backup export/import, pairing helpers). Unknown `/setup/*` paths are gated and then 404, never proxied. | wrapper `requireSetupAuth` |
+| OpenClaw gateway auth | the Control UI and gateway API (`/`, `/openclaw`, WebSocket) | gateway token + device pairing. The wrapper injects `Authorization: Bearer <OPENCLAW_GATEWAY_TOKEN>` on proxied HTTP and WebSocket requests; a client-supplied Bearer is passed through untouched. |
+
+The Control UI is deliberately **not** behind Basic auth: doing so caused repeated browser prompts and the browser's cached Basic header shadowed the gateway token. Browsers may still replay `/setup` credentials on sibling paths; the wrapper replaces any Basic header with the gateway Bearer before proxying.
+
+Unauthenticated by design:
+- `/healthz` and `/setup/healthz` (Railway probes; no secrets in the response).
+- `/hooks/*` (OpenClaw webhook endpoints, which validate their own hook token). If you expose hooks through Cloudflare, add an Access bypass or service-token rule for that path; otherwise Access blocks them, which is the safe default.
+
+If you deploy **without** Cloudflare Access (public Railway domain), the Control UI is reachable by anyone who has the URL and is stopped only by the gateway token and pairing. Do not do that with a weak or wrapper-generated token.
 
 ## Railway deploy instructions
 
@@ -40,7 +56,7 @@ Internet → Cloudflare Access (MFA) → Cloudflare Tunnel → cloudflared servi
 3) Set variables:
 
 Required:
-- `SETUP_PASSWORD` — password for `/setup` and the Control UI (`/openclaw`) via HTTP Basic auth
+- `SETUP_PASSWORD` — password for the `/setup` admin surface via HTTP Basic auth (not the Control UI)
 - `OPENCLAW_GATEWAY_TOKEN` — generate a long random secret. The wrapper falls back to generating and persisting one in `/data/.openclaw/gateway.token` if unset, but a Railway secret is preferred.
 
 Recommended:
@@ -192,6 +208,10 @@ Set `OPENCLAW_PUBLIC_ORIGIN` to the exact HTTPS origin in the browser (scheme + 
 The gateway is running but no device has been approved yet. Browser clients behind the proxy count as remote, so approval is required once per device.
 
 - Open `/setup` → **Pairing helper** → *Refresh pending devices* → *Approve*, or Debug console `openclaw devices list` / `openclaw devices approve <requestId>`.
+
+### Browser keeps prompting for a password on the Control UI
+
+Older versions of this wrapper put Basic auth in front of the whole Control UI. That is gone: only `/setup/*` prompts. If you still see prompts on `/` or `/openclaw`, you are running an old image; if the Control UI asks for a *gateway secret* instead, that is OpenClaw's own login (paste `OPENCLAW_GATEWAY_TOKEN` or approve the device).
 
 ### “unauthorized: gateway token mismatch”
 

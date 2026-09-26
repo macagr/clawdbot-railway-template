@@ -1644,44 +1644,53 @@ proxy.on("error", (err, _req, res) => {
   }
 });
 
-// --- Dashboard password protection ---
-// Require the same SETUP_PASSWORD for the entire Control UI dashboard,
-// not just the /setup routes.  Healthcheck is excluded so Railway probes work.
-function requireDashboardAuth(req, res, next) {
-  if (req.path === "/healthz" || req.path === "/setup/healthz") return next();
-  if (req.path.startsWith("/hooks")) return next(); // allow OpenClaw webhook endpoints to bypass dashboard auth
-  if (!SETUP_PASSWORD) return next(); // no password configured → open
-  const header = req.headers.authorization || "";
-  const [scheme, encoded] = header.split(" ");
-  if (scheme !== "Basic" || !encoded) {
-    res.set("WWW-Authenticate", 'Basic realm="OpenClaw Dashboard"');
-    return res.status(401).send("Auth required");
-  }
-  const decoded = Buffer.from(encoded, "base64").toString("utf8");
-  const idx = decoded.indexOf(":");
-  const password = idx >= 0 ? decoded.slice(idx + 1) : "";
-  if (password !== SETUP_PASSWORD) {
-    res.set("WWW-Authenticate", 'Basic realm="OpenClaw Dashboard"');
-    return res.status(401).send("Invalid password");
-  }
-  return next();
+// --- Auth boundaries ---
+// SETUP_PASSWORD (HTTP Basic) protects ONLY the /setup admin surface. The proxied Control UI
+// is not behind Basic auth: the public hostname is protected by Cloudflare Access, and the
+// gateway enforces its own token auth + device pairing. Putting Basic auth in front of the
+// Control UI caused repeated browser prompts and the Basic header shadowed the gateway token.
+//
+// Unauthenticated by design: /healthz, /setup/healthz (Railway probes) and /hooks/* (OpenClaw
+// webhook endpoints, which carry their own hook token). Everything else under /setup that is
+// not an explicit route above is still gated here and then 404s, so no admin path is exposed.
+function guardSetupPrefix(req, res, next) {
+  if (!req.path.startsWith("/setup")) return next();
+  if (req.path === "/setup/healthz") return next();
+  return requireSetupAuth(req, res, () => res.status(404).type("text/plain").send("Not found\n"));
 }
 
 // --- Gateway token injection ---
 // The gateway is only reachable from this container. The Control UI in the browser
 // cannot set custom Authorization headers for WebSocket connections, so we inject
 // the token into proxied requests at the wrapper level.
-function attachGatewayAuthHeader(req) {
-  if (!req?.headers?.authorization && OPENCLAW_GATEWAY_TOKEN) {
-    req.headers.authorization = `Bearer ${OPENCLAW_GATEWAY_TOKEN}`;
-  }
+// A Basic header (browsers replay cached /setup credentials for sibling paths) is replaced;
+// a client-supplied Bearer (e.g. an API client with its own gateway/device token) is kept.
+function gatewayAuthHeaderFor(existing) {
+  if (!OPENCLAW_GATEWAY_TOKEN) return existing;
+  const scheme = String(existing || "").split(" ")[0];
+  if (scheme && scheme.toLowerCase() === "bearer") return existing;
+  return `Bearer ${OPENCLAW_GATEWAY_TOKEN}`;
 }
 
-proxy.on("proxyReqWs", (_proxyReq, req) => {
+function attachGatewayAuthHeader(req) {
+  if (!req?.headers) return;
+  const next = gatewayAuthHeaderFor(req.headers.authorization);
+  if (next) req.headers.authorization = next;
+}
+
+// Set the header on the outgoing request too, so it is applied regardless of when http-proxy
+// copies headers from the incoming request.
+proxy.on("proxyReq", (proxyReq, req) => {
   attachGatewayAuthHeader(req);
+  if (req.headers.authorization) proxyReq.setHeader("authorization", req.headers.authorization);
 });
 
-app.use(requireDashboardAuth, async (req, res) => {
+proxy.on("proxyReqWs", (proxyReq, req) => {
+  attachGatewayAuthHeader(req);
+  if (req.headers.authorization) proxyReq.setHeader("authorization", req.headers.authorization);
+});
+
+app.use(guardSetupPrefix, async (req, res) => {
   // If not configured, force users to /setup for any non-setup routes.
   if (!isConfigured() && !req.path.startsWith("/setup")) {
     return res.redirect("/setup");
