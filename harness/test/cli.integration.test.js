@@ -15,6 +15,67 @@ function rp(args, { env = {}, input } = {}) {
   return { code: r.status, out: r.stdout, err: r.stderr };
 }
 
+// The exact strings a hostile or merely unlucky player might type. Nothing here may be shell-parsed.
+const NASTY = [
+  "hello ' \" $HOME $(touch /tmp/SHOULD_NOT_EXIST) `id`",
+  "foo; echo bad",
+  "a && b",
+  "x | y",
+  "<tag>",
+  "> redirect",
+  "multiline text\nsecond line\n\tthird line with tab and trailing spaces   ",
+  "heredoc marker <<'EOF'\nEOF",
+].join("\n");
+
+test("--text-env: player text travels as process environment, survives byte-for-byte, never enters the command string; validation; idempotency", () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "rp-cli-env-"));
+  const pkg = path.join(base, "pkg"), ws = path.join(base, "ws");
+  fs.cpSync(FIXTURE_DIR, pkg, { recursive: true });
+  const responses = path.join(base, "responses.json");
+  fs.writeFileSync(responses, JSON.stringify({ director: [directorPacket()], novelist: [NOVELIST_PROSE], editor: [EDITOR_OK] }));
+  const shouldNotExist = ["/tmp/SHOULD_NOT_EXIST", path.join(os.tmpdir(), "SHOULD_NOT_EXIST")];
+  try {
+    for (const p of shouldNotExist) fs.rmSync(p, { force: true });
+    assert.equal(rp(["campaign", "install", "--from", pkg, "--to", ws]).code, 0);
+    // Exactly what the coordinator's exec call is: an argument list plus one env var. No shell involved.
+    const argv = ["turn", "--campaign", ws, "--transport", "discord", "--event-id", "discord:env-1", "--text-env"];
+    assert.ok(!argv.join(" ").includes("hello") && !argv.some((a) => NASTY.includes(a)), "player text is absent from the command string");
+    let r = rp(argv, { env: { RP_FAKE_RESPONSES: responses, RP_PLAYER_INPUT: NASTY } });
+    assert.equal(r.code, 0, r.err);
+    assert.match(r.out, /You remembered it/);
+    const turnFiles = fs.readdirSync(path.join(ws, "runtime", "turns")).filter((f) => f.endsWith(".json"));
+    assert.equal(turnFiles.length, 1);
+    const turn = JSON.parse(fs.readFileSync(path.join(ws, "runtime", "turns", turnFiles[0]), "utf8"));
+    assert.equal(turn.input.text, NASTY, "player text reached the harness exactly (quotes, $(...), backticks, newlines, tabs, trailing spaces)");
+    assert.equal(turn.event_id, "discord:env-1");
+    for (const p of shouldNotExist) assert.ok(!fs.existsSync(p), `no shell side effect: ${p}`);
+    assert.ok(!fs.readdirSync(base).some((f) => /tmp|input/i.test(f)), "no temporary input file was written");
+    // idempotency unchanged: same event id => same output, no new revision, even with different env text
+    const dup = rp(argv, { env: { RP_FAKE_RESPONSES: responses, RP_PLAYER_INPUT: "something else entirely" } });
+    assert.equal(dup.code, 0, dup.err);
+    assert.equal(dup.out, r.out);
+    assert.match(rp(["status", "--campaign", ws]).out, /revision 1/);
+    assert.equal(fs.readdirSync(path.join(ws, "runtime", "turns")).filter((f) => f.endsWith(".json")).length, 1);
+    // validation
+    r = rp(["turn", "--campaign", ws, "--transport", "discord", "--text-env"], { env: { RP_FAKE_RESPONSES: responses } });
+    assert.equal(r.code, 1); assert.match(r.err, /RP_PLAYER_INPUT is not set/); assert.doesNotMatch(r.err, /HOME|PATH=/);
+    r = rp(["turn", "--campaign", ws, "--text-env"], { env: { RP_PLAYER_INPUT: "   \n" } });
+    assert.equal(r.code, 1); assert.match(r.err, /player message is empty/);
+    r = rp(["turn", "--campaign", ws, "--text-env", "--text", "x"], { env: { RP_PLAYER_INPUT: "y" } });
+    assert.equal(r.code, 1); assert.match(r.err, /conflicting input sources --text and --text-env/);
+    r = rp(["turn", "--campaign", ws, "--stdin", "--text-env"], { env: { RP_PLAYER_INPUT: "y" }, input: "z" });
+    assert.equal(r.code, 1); assert.match(r.err, /conflicting input sources/);
+    r = rp(["turn", "--campaign", ws, "--text-env", "SOME_OTHER_VAR"], { env: { RP_PLAYER_INPUT: "y", SOME_OTHER_VAR: "no" } });
+    assert.equal(r.code, 1); assert.match(r.err, /takes no value; it always reads RP_PLAYER_INPUT/);
+    r = rp(["turn", "--campaign", ws]);
+    assert.equal(r.code, 1); assert.match(r.err, /exactly one of --text <t>, --stdin, or --text-env/);
+    // the environment variable is ignored unless --text-env is given
+    r = rp(["turn", "--campaign", ws, "--event-id", "t2", "--text", "plain"], { env: { RP_FAKE_RESPONSES: path.join(base, "none.json"), RP_PLAYER_INPUT: "ignored" } });
+    assert.equal(r.code, 2, "ran a turn from --text (model failure expected with no responses), not from the env var");
+    assert.match(rp(["status", "--campaign", ws]).out, /revision 1/);
+  } finally { fs.rmSync(base, { recursive: true, force: true }); for (const p of shouldNotExist) fs.rmSync(p, { force: true }); }
+});
+
 test("CLI end to end: install, turn via stdin, status, validate, dry-run-save, pending/deliver, reconstruct-check, export", () => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "rp-cli-"));
   const pkg = path.join(base, "pkg"), ws = path.join(base, "ws");

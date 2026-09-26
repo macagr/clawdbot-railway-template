@@ -64,7 +64,7 @@ Nothing in the harness invents missing canon; recovery is restore-based.
 ## Security boundaries
 
 - Player: Discord allowlists at OpenClaw (`channels.discord.groupPolicy: allowlist`, per-channel `users`, `commands.allowFrom`) and again in the harness (`campaign.json → discord`). Players are never made OpenClaw command owners; `commands.ownerAllowFrom` is an operator/deployment setting that `rp setup-openclaw` does not touch.
-- Coordinator: tools `exec` + `message` only; `tools.exec.mode: allowlist` plus one path-only approval entry for `/opt/rp-harness/bin/rp` in the exec-approvals store; never reads campaign files. Verify with `openclaw approvals get --gateway --agent <CAMPAIGN_ID>`.
+- Coordinator: tools `exec` + `message` only; `tools.exec.mode: allowlist` plus one path-only approval entry for `/opt/rp-harness/bin/rp` in the exec-approvals store; never reads campaign files. Player text reaches `rp` as the exec env variable `RP_PLAYER_INPUT` (`--text-env`), so no shell, redirection, heredoc or pipe is ever needed or allowed. Verify with `openclaw approvals get --gateway --agent <CAMPAIGN_ID>`.
 - OpenClaw Doctor warnings about missing memory, `skill_workshop` or autonomous-memory features on campaign agents are expected and intentional: authority is explicit harness state + canonical package + committed turns, and OpenClaw conversational memory is not canon.
 - Discord commands use the `!` prefix (`!status`); `/status` in Discord is OpenClaw's own command. See [transports.md](transports.md).
 - Specialists: no tools; every task is a self-contained message.

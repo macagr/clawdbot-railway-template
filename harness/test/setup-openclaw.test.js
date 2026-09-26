@@ -134,10 +134,20 @@ test("workspaces: coordinator AGENTS.md relays only; specialists get self-contai
     const coord = fs.readFileSync(path.join(r.dir, "AGENTS.md"), "utf8");
     // --campaign is a directory: the coordinator runs from its workspace, so the absolute root is required
     const root = path.resolve(r.dir);
-    assert.ok(coord.includes(`rp turn --campaign ${root} --transport discord`), "rp turn uses the absolute campaign root");
-    assert.ok(coord.includes(`rp command --campaign ${root} --transport discord`), "rp command uses the absolute campaign root");
+    assert.ok(coord.includes(`\`/opt/rp-harness/bin/rp turn --campaign ${root} --transport discord --event-id <message id if available> --text-env\``), "rp turn: absolute rp binary, absolute root, --text-env");
+    assert.ok(coord.includes(`\`/opt/rp-harness/bin/rp command --campaign ${root} --transport discord`), "rp command uses the absolute binary and campaign root");
     assert.ok(!coord.includes("--campaign campaign_fixture "), "never a bare campaign id");
     assert.ok(!coord.includes(path.join(root, "campaign_fixture")), "no <campaign>/<campaign> path");
+    // player text travels as structured exec env, never through the shell
+    assert.match(coord, /`RP_PLAYER_INPUT` = the player's message, verbatim/);
+    assert.ok(!coord.includes("--stdin") && !coord.includes("<<") && !coord.includes("EOF"), "no heredoc/stdin instructions");
+    const invocations = [...coord.matchAll(/`(\/opt\/rp-harness\/bin\/rp [^`]+)`/g)].map((m) => m[1]);
+    assert.equal(invocations.length, 2);
+    for (const inv of invocations) {
+      const stripped = inv.replace(/<message id if available>/g, "").replace(/<the message verbatim, including its arguments>/g, "");
+      assert.ok(!/[<>|;&`$]|\bsh -c\b|bash/.test(stripped), `no shell syntax in generated invocation: ${inv}`);
+      assert.ok(inv.startsWith("/opt/rp-harness/bin/rp "), "absolute executable, same as the allowlist entry");
+    }
     assert.match(coord, /Never read, quote, or reason about files/);
     assert.match(coord, /`!status`/, "coordinator instructions use the Discord command prefix");
     assert.doesNotMatch(coord, /`\/status`/);
@@ -160,8 +170,10 @@ test("coordinator AGENTS: custom workspace root renders its own absolute path; t
     const custom = path.join(base, "my workspaces", "campaign_fixture");
     fs.cpSync(FIXTURE_DIR, custom, { recursive: true });
     const store = CampaignStore.init(custom);
-    writeWorkspaces(store, { workspacesRoot: path.dirname(custom), transport: "discord" });
+    writeWorkspaces(store, { workspacesRoot: path.dirname(custom), transport: "discord", rpBin: "/custom/bin/rp" });
     const coord = fs.readFileSync(path.join(custom, "AGENTS.md"), "utf8");
+    assert.ok(coord.includes(`\`/custom/bin/rp turn --campaign ${path.resolve(custom)} --transport discord`), "custom rp binary propagates from the rpBin option");
+    assert.ok(!coord.includes("/opt/rp-harness"), "default binary is not hard-coded in the template");
     const turnLine = coord.split("\n").find((l) => l.includes("rp turn --campaign"));
     const cmdLine = coord.split("\n").find((l) => l.includes("rp command --campaign"));
     const campaignArg = (line) => line.match(/--campaign (.*?) --transport/)[1];

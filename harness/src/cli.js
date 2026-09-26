@@ -22,7 +22,8 @@ const HARNESS_ROOT = fileURLToPath(new URL("../", import.meta.url));
 const USAGE = `rp <command> [options]
 
 Play
-  turn --campaign <dir> [--event-id <id>] [--transport cli|discord|openclaw-ui] [--player <id>] [--show-stop|--hide-stop] (--text <t> | --stdin)
+  turn --campaign <dir> [--event-id <id>] [--transport cli|discord|openclaw-ui] [--player <id>] [--show-stop|--hide-stop] (--text <t> | --stdin | --text-env)
+       --text-env reads the player message from the RP_PLAYER_INPUT environment variable (no shell redirection needed)
   command --campaign <dir> [--event-id <id>] [--transport <t>] -- /<command> [args]   (--transport discord also accepts the Discord prefix form, e.g. !status)
   discord --campaign <dir> --event <json-file|->      handle one normalized Discord event; prints JSON {chunks, turn_id}
   deliver --campaign <dir> --turn <id> [--message-id <id>...]   mark a committed turn delivered
@@ -62,6 +63,29 @@ function parseArgs(argv) {
 
 function need(flags, k) { if (!flags[k]) throw new Error(`--${k} is required`); return flags[k]; }
 function readStdin() { return fs.readFileSync(0, "utf8"); }
+
+/** The only environment variable `--text-env` reads. Fixed on purpose: the caller cannot choose one. */
+export const PLAYER_INPUT_ENV = "RP_PLAYER_INPUT";
+
+/**
+ * Player text for `turn`, from exactly one source: --text <t>, --stdin, or --text-env (RP_PLAYER_INPUT).
+ * --text-env exists so a caller that may not use shell redirection (OpenClaw exec in allowlist mode
+ * rejects heredocs and pipes) can pass arbitrary player text as structured process environment,
+ * never inside the command string.
+ */
+export function readTurnInput(f, env = process.env) {
+  const sources = ["text", "stdin", "text-env"].filter((k) => f[k] !== undefined && f[k] !== false);
+  if (sources.length === 0) throw new Error("no input text: use exactly one of --text <t>, --stdin, or --text-env (reads RP_PLAYER_INPUT)");
+  if (sources.length > 1) throw new Error(`conflicting input sources --${sources.join(" and --")}: use exactly one of --text, --stdin, --text-env`);
+  let text;
+  if (f["text-env"] !== undefined) {
+    if (f["text-env"] !== true) throw new Error("--text-env takes no value; it always reads RP_PLAYER_INPUT");
+    text = env[PLAYER_INPUT_ENV];
+    if (text === undefined) throw new Error(`--text-env: environment variable ${PLAYER_INPUT_ENV} is not set (pass the player's message as exec env, not in the command)`);
+  } else text = f.stdin ? readStdin() : f.text;
+  if (typeof text !== "string" || !text.trim()) throw new Error("no input text: the player message is empty");
+  return text;
+}
 function print(s) { process.stdout.write(`${typeof s === "string" ? s : JSON.stringify(s, null, 2)}\n`); }
 
 export async function main(argv = process.argv.slice(2), { env = process.env } = {}) {
@@ -105,8 +129,7 @@ export async function main(argv = process.argv.slice(2), { env = process.env } =
 
   switch (cmd) {
     case "turn": {
-      const text = f.stdin ? readStdin() : f.text;
-      if (!text || !String(text).trim()) throw new Error("no input text (--text or --stdin)");
+      const text = readTurnInput(f, env);
       const t = new TextTransport(h, { name: transport });
       const showStop = f["show-stop"] ? true : f["hide-stop"] ? false : null;
       if (transport === "discord") {
@@ -157,7 +180,7 @@ export async function main(argv = process.argv.slice(2), { env = process.env } =
     }
     case "setup-openclaw": {
       const cfg = openclawConfigFor(h.store, { rpBin: f["rp-bin"], workspacesRoot: f["workspaces-root"] });
-      const written = writeWorkspaces(h.store, { workspacesRoot: f["workspaces-root"], transport: h.store.manifest.discord?.channel_id ? "discord" : "openclaw-ui" });
+      const written = writeWorkspaces(h.store, { rpBin: f["rp-bin"], workspacesRoot: f["workspaces-root"], transport: h.store.manifest.discord?.channel_id ? "discord" : "openclaw-ui" });
       const results = await applyConfig(cfg, { dryRun: Boolean(f["dry-run"]), log: (l) => process.stdout.write(`${l}\n`) });
       print({ workspaces: written, ops: results.length, approvals: results.approvals.map((a) => ({ agent: a.agentId, pattern: a.pattern, ok: a.dryRun ? "dry-run" : a.code === 0 })), dry_run: Boolean(f["dry-run"]), agents: Object.keys(cfg.agents.entries), bindings: cfg.bindings.length });
       for (const i of results.instructions) process.stdout.write(`\nACTION REQUIRED: ${i}\n`);

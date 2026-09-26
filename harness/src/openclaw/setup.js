@@ -10,9 +10,11 @@ import { agentIdFor } from "../campaign/manifest.js";
 import { discordCommandPrefix } from "../transport/discord.js";
 
 export const SPECIALIST_ROLES = ["director", "novelist", "editor"];
+/** The one executable allowlisted for the coordinator; also rendered into its instructions. */
+export const DEFAULT_RP_BIN = "/opt/rp-harness/bin/rp";
 
 /** The OpenClaw config fragments (path -> JSON value) for one campaign. */
-export function openclawConfigFor(store, { rpBin = "/opt/rp-harness/bin/rp", workspacesRoot } = {}) {
+export function openclawConfigFor(store, { rpBin = DEFAULT_RP_BIN, workspacesRoot } = {}) {
   const m = store.manifest;
   const id = m.id;
   const root = workspacesRoot || path.dirname(store.root);
@@ -149,7 +151,7 @@ export function configSetOps(cfg, current = {}) {
 }
 
 /** Write AGENTS.md/SOUL.md for the coordinator (in the campaign workspace) and for each specialist. */
-export function writeWorkspaces(store, { workspacesRoot, transport = "discord" } = {}) {
+export function writeWorkspaces(store, { workspacesRoot, transport = "discord", rpBin = DEFAULT_RP_BIN } = {}) {
   const m = store.manifest;
   const root = workspacesRoot || path.dirname(store.root);
   const written = [];
@@ -157,8 +159,11 @@ export function writeWorkspaces(store, { workspacesRoot, transport = "discord" }
   const command_prefix = transport === "discord" ? discordCommandPrefix(m) : "/";
   // --campaign takes a directory. OpenClaw runs the coordinator from its workspace (= store.root),
   // so a bare campaign id would resolve to <root>/<id>/campaign.json; always pass the absolute root.
+  // rp_bin is the same absolute executable the exec allowlist names. Player text travels as exec
+  // env (RP_PLAYER_INPUT, read by --text-env), never inside the command string: allowlist mode
+  // rejects heredocs/pipes, and player text must not be shell-parsed at all.
   const campaign_root = path.resolve(store.root);
-  writeFileAtomic(coord, fill(genericPrompt("coordinator-AGENTS"), { campaign_id: m.id, campaign_root, transport, command_prefix }));
+  writeFileAtomic(coord, fill(genericPrompt("coordinator-AGENTS"), { campaign_id: m.id, campaign_root, rp_bin: rpBin || DEFAULT_RP_BIN, transport, command_prefix }));
   written.push(coord);
   const soul = path.join(store.root, "SOUL.md");
   if (!exists(soul)) { writeFileAtomic(soul, `Coordinator for ${m.display_name}. Relay only. No narration, no opinions about the fiction.\n`); written.push(soul); }

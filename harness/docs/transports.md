@@ -4,7 +4,11 @@ A transport delivers text in and out; it never changes canon semantics. Three ar
 
 ## Discord (`transport/discord.js`)
 
-OpenClaw does the Discord I/O. The coordinator agent runs `rp turn --transport discord --event-id <message id>` (or `rp discord --event <json>` for the full helper) and posts the output; then `rp deliver --turn <id> --message-id <ids>` records delivery.
+OpenClaw does the Discord I/O. The coordinator agent calls the exec tool with `/opt/rp-harness/bin/rp turn --campaign <absolute workspace> --transport discord --event-id <message id> --text-env` and passes the player's message as the structured exec `env` argument `RP_PLAYER_INPUT` (or uses `rp discord --event <json>` for the full helper), posts the output, then `rp deliver --turn <id> --message-id <ids>` records delivery.
+
+### Player text never touches the shell
+
+OpenClaw's exec allowlist mode rejects shell redirections, heredocs and pipes, so `rp turn --stdin <<'EOF'` is denied (`exec denied: allowlist miss`). More importantly, player text must never be shell-parsed. The generated coordinator instructions therefore use `--text-env`, which reads the message from the fixed environment variable `RP_PLAYER_INPUT` (the variable name cannot be changed by the caller). The command string is a constant argument list containing the absolute `rp` path (the same one the exec allowlist names), the absolute campaign root and the event id; the message travels separately as process environment. `--text` and `--stdin` remain for CLI and tests; exactly one of the three must be given. The regression test feeds quotes, `$(...)`, backticks, `;`, `&&`, `|`, `<`, `>`, heredoc markers and multi-line text through this path and checks the harness receives it byte-for-byte with no side effects.
 
 - Event id = `discord:<message id>` → duplicate Discord events (retries, double delivery) never create a second turn; the stored output is returned instead.
 - Allowlists from `campaign.json → discord` (`guild_id`, `channel_id`, `user_ids`) are checked before anything runs; refusals are silent to canon.

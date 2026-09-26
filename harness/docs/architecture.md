@@ -61,7 +61,7 @@ The harness calls specialist agents synchronously with `openclaw agent --agent <
 - `tools.agentToAgent.enabled`, `tools.sessions.visibility: "agent"`, `tools.exec.mode: "allowlist"`, `commands.allowFrom.discord` (merged with existing entries). `commands.ownerAllowFrom` is never written: players are allowlisted users, not OpenClaw administrators; set the operator account yourself (`openclaw config set --strict-json commands.ownerAllowFrom '["discord:<OPERATOR_ID>"]'`).
 - Exec allowlist entry for the coordinator through the approvals store, not config: `openclaw approvals allowlist add --gateway --agent <CAMPAIGN_ID> /opt/rp-harness/bin/rp` (path-only, idempotent). If that command fails, setup exits with code 4 and prints the exact command as an `ACTION REQUIRED` line; it never falls back to a broader exec mode.
 - Memory disabled for all campaign agents (canon is files, not memory).
-- Workspace files: coordinator `AGENTS.md` (relay only, never reads campaign files), specialist `AGENTS.md` (self-contained tasks, no tools).
+- Workspace files: coordinator `AGENTS.md` (relay only, never reads campaign files; invokes the absolute `rp` binary with the absolute campaign root, and passes player text as exec env `RP_PLAYER_INPUT` via `--text-env`, never in the command string), specialist `AGENTS.md` (self-contained tasks, no tools).
 
 Use `--dry-run` to print the exact `openclaw config set --strict-json` commands. Verify with `openclaw agents list --bindings` and `openclaw config validate`.
 
