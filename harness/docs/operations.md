@@ -61,7 +61,7 @@ Nothing in the harness invents missing canon; recovery is restore-based.
 ## Security boundaries
 
 - Player: Discord allowlists at OpenClaw (`users`, `commands.allowFrom`) and again in the harness (`campaign.json → discord`).
-- Coordinator: `exec` allowlisted to `rp` only; never reads campaign files.
+- Coordinator: `tools.exec.mode: allowlist` plus one path-only approval entry for `/opt/rp-harness/bin/rp` in the exec-approvals store; never reads campaign files. Verify with `openclaw approvals get --gateway --agent <CAMPAIGN_ID>`.
 - Specialists: no tools; every task is a self-contained message.
 - Secrets: provider keys and persistence tokens are env vars; never written to the workspace; logs redact bearer tokens and key-like strings.
 - Durable canon credentials (Google etc.) live only in n8n.

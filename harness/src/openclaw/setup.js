@@ -52,11 +52,39 @@ export function openclawConfigFor(store, { rpBin = "/opt/rp-harness/bin/rp", wor
     tools: {
       agentToAgent: { enabled: true, allow: [id, ...Object.keys(entries).filter((k) => k !== id)] },
       sessions: { visibility: "agent" },
-      exec: { security: "allowlist", allowlist: [rpBin] },
+      // OpenClaw 2026.9.5: tools.exec.mode is the persisted policy; allowlist entries live in the
+      // exec-approvals store (openclaw approvals allowlist add), not in config.
+      exec: { mode: "allowlist" },
     },
+    approvals: [{ agentId: id, pattern: rpBin }],
     commands: users.length ? { allowFrom: { discord: users.map((u) => `user:${u}`) } } : null,
     memory: { agents: Object.keys(entries) },
   };
+}
+
+/** Config keys this generator may emit. Guarded by tests so unsupported keys are not reintroduced. */
+export const ALLOWED_CONFIG_KEY_PATTERNS = [
+  /^agents\.entries\.[a-z][a-z0-9_-]*$/,
+  /^agents\.entries\.[a-z][a-z0-9_-]*\.memory\.enabled$/,
+  /^agents\.ownership$/,
+  /^bindings$/,
+  /^channels\.discord\.guilds\.[^.]+\.channels\.[^.]+$/,
+  /^tools\.agentToAgent\.enabled$/,
+  /^tools\.sessions\.visibility$/,
+  /^tools\.exec\.mode$/,
+  /^commands\.allowFrom\.discord$/,
+];
+
+/** Approval commands (exec allowlist) as argv arrays. Idempotent on the OpenClaw side. */
+export function approvalOps(cfg) {
+  return (cfg.approvals || []).map(({ agentId, pattern }) => ({
+    agentId, pattern,
+    args: ["approvals", "allowlist", "add", "--gateway", "--agent", agentId, "--pattern", pattern],
+  }));
+}
+
+export function approvalInstruction(op, bin = "openclaw") {
+  return `${bin} ${op.args.map(quote).join(" ")}`;
 }
 
 /** Flatten into `openclaw config set --strict-json <path> <json>` operations. */
@@ -68,8 +96,7 @@ export function configSetOps(cfg) {
   if (cfg.discord) for (const [gid, g] of Object.entries(cfg.discord.guilds)) for (const [cid, c] of Object.entries(g.channels)) ops.push([`channels.discord.guilds.${gid}.channels.${cid}`, c]);
   ops.push(["tools.agentToAgent.enabled", true]);
   ops.push(["tools.sessions.visibility", cfg.tools.sessions.visibility]);
-  ops.push(["tools.exec.security", cfg.tools.exec.security]);
-  ops.push(["tools.exec.allowlist", cfg.tools.exec.allowlist, { merge: "list" }]);
+  ops.push(["tools.exec.mode", cfg.tools.exec.mode]);
   for (const agentId of cfg.memory.agents) ops.push([`agents.entries.${agentId}.memory.enabled`, false, { optional: true }]);
   if (cfg.commands) ops.push(["commands.allowFrom.discord", cfg.commands.allowFrom.discord, { merge: "list" }]);
   return ops;
@@ -96,7 +123,12 @@ export function writeWorkspaces(store, { workspacesRoot, transport = "discord" }
   return written;
 }
 
-/** Apply config through the openclaw CLI. `runner` is injectable for tests. */
+/**
+ * Apply config through the openclaw CLI, then the exec-approval allowlist entries.
+ * A failed config op aborts (unless optional). A failed approval op never aborts and never
+ * broadens exec; it is reported with the exact command for the operator to run.
+ * `run` is injectable for tests. Returns { results, approvals, instructions }.
+ */
 export async function applyConfig(cfg, { bin = process.env.OPENCLAW_BIN || "openclaw", run = spawnSync, dryRun = false, log = () => {} } = {}) {
   const results = [];
   for (const [key, value, opts = {}] of configSetOps(cfg)) {
@@ -106,6 +138,19 @@ export async function applyConfig(cfg, { bin = process.env.OPENCLAW_BIN || "open
     results.push({ key, code: r.code, output: r.output });
     if (r.code !== 0 && !opts.optional) throw new Error(`openclaw config set ${key} failed (${r.code}): ${r.output.slice(-400)}`);
   }
+  const approvals = [];
+  const instructions = [];
+  for (const op of approvalOps(cfg)) {
+    const cmd = approvalInstruction(op, bin);
+    if (dryRun) { approvals.push({ ...op, dryRun: true }); log(cmd); continue; }
+    const r = await run(bin, op.args);
+    approvals.push({ ...op, code: r.code, output: r.output });
+    if (r.code !== 0) {
+      instructions.push(`exec allowlist entry for ${op.agentId} could not be added automatically (${r.output.trim().slice(-200) || `exit ${r.code}`}). Run manually:\n  ${cmd}`);
+    }
+  }
+  results.approvals = approvals;
+  results.instructions = instructions;
   return results;
 }
 

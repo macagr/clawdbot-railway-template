@@ -143,8 +143,9 @@ export async function main(argv = process.argv.slice(2), { env = process.env } =
       const cfg = openclawConfigFor(h.store, { rpBin: f["rp-bin"], workspacesRoot: f["workspaces-root"] });
       const written = writeWorkspaces(h.store, { workspacesRoot: f["workspaces-root"], transport: h.store.manifest.discord?.channel_id ? "discord" : "openclaw-ui" });
       const results = await applyConfig(cfg, { dryRun: Boolean(f["dry-run"]), log: (l) => process.stdout.write(`${l}\n`) });
-      print({ workspaces: written, ops: results.length, dry_run: Boolean(f["dry-run"]), agents: Object.keys(cfg.agents.entries), bindings: cfg.bindings.length });
-      return 0;
+      print({ workspaces: written, ops: results.length, approvals: results.approvals.map((a) => ({ agent: a.agentId, pattern: a.pattern, ok: a.dryRun ? "dry-run" : a.code === 0 })), dry_run: Boolean(f["dry-run"]), agents: Object.keys(cfg.agents.entries), bindings: cfg.bindings.length });
+      for (const i of results.instructions) process.stdout.write(`\nACTION REQUIRED: ${i}\n`);
+      return results.instructions.length ? 4 : 0;
     }
     case "sillytavern": {
       if (sub === "import") {

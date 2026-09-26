@@ -33,7 +33,7 @@ All commands take `--campaign <workspace dir>` unless noted. Exit codes: 0 ok, 1
 |---|---|
 | `rp init` | create state/runtime for a package (idempotent) |
 | `rp campaign install --from <pkg> --to <workspace>` | copy a package, never touching existing state |
-| `rp setup-openclaw [--dry-run] [--rp-bin <path>] [--workspaces-root <dir>]` | write workspace files and apply OpenClaw config |
+| `rp setup-openclaw [--dry-run] [--rp-bin <path>] [--workspaces-root <dir>]` | write workspace files, apply OpenClaw config (`tools.exec.mode: allowlist`), add the exec-approval allowlist entry for `rp`; exit 4 with an `ACTION REQUIRED` command if the approval could not be added |
 | `rp sillytavern import --file <card.json> [--id <id>] [--force]` / `rp sillytavern export --voice <id> --out <file>` | card adapter |
 
 ## Environment
