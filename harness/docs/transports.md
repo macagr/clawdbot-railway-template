@@ -12,7 +12,7 @@ OpenClaw does the Discord I/O. The coordinator agent runs `rp turn --transport d
 - `rp pending` lists committed-but-undelivered turns; `/resume` redelivers the last one.
 - Threads: `discord.threads = off | sessions | branches_on_request`. Threads never create a branch by themselves; in `branches_on_request` a thread must first run `/branch create <id>`.
 
-OpenClaw side (written by `rp setup-openclaw`): binding guild+channel → coordinator; `requireMention: false`; `users` allowlist; `historyLimit: 1` (the harness owns history); `commands.allowFrom.discord` for the player.
+OpenClaw side (written by `rp setup-openclaw`): binding guild+channel → coordinator; `requireMention: false`; `users` allowlist; `commands.allowFrom.discord` for the player. The harness owns history; optionally lower `channels.discord.historyLimit` (channel-wide) by hand.
 
 Setup checklist: create the bot (Message Content Intent on), invite with `bot` + `applications.commands`, put guild/channel/user ids into `campaign.json`, run `rp setup-openclaw`, restart the gateway, `openclaw channels status --probe`, send `/status` in the channel.
 

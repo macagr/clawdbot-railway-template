@@ -56,7 +56,7 @@ The harness calls specialist agents synchronously with `openclaw agent --agent <
 
 - `agents.ownership: "explicit"`; `agents.entries.<CAMPAIGN_ID>` (workspace = campaign dir, `tools.allow: ["exec"]`) and one entry per specialist role with `tools.allow: []`, separate workspaces `<root>/<CAMPAIGN_ID>-<role>`.
 - `bindings[]`: Discord guild + channel → coordinator.
-- `channels.discord.guilds.<guild>.channels.<channel>`: `requireMention: false`, `users` allowlist, `historyLimit: 1`.
+- `channels.discord.guilds.<guild>.channels.<channel>`: `requireMention: false`, `users` allowlist. (`historyLimit` is channel-wide in OpenClaw; set `channels.discord.historyLimit` yourself if you want less Discord history in the coordinator's context. The coordinator relays only, so it is not required.)
 - `tools.agentToAgent.allow`, `tools.sessions.visibility: "agent"`, `tools.exec.security: "allowlist"` with the `rp` binary, `commands.allowFrom.discord`.
 - Memory disabled for all campaign agents (canon is files, not memory).
 - Workspace files: coordinator `AGENTS.md` (relay only, never reads campaign files), specialist `AGENTS.md` (self-contained tasks, no tools).

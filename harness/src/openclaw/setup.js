@@ -42,7 +42,9 @@ export function openclawConfigFor(store, { rpBin = "/opt/rp-harness/bin/rp", wor
     bindings.push({ agentId: id, match: { channel: "discord", guildId: m.discord.guild_id, peer: { kind: "channel", id: m.discord.channel_id } } });
   }
   const users = m.discord?.user_ids?.length ? m.discord.user_ids : m.player.user_ids || [];
-  const channelCfg = m.discord?.channel_id ? { [m.discord.channel_id]: { requireMention: false, users, historyLimit: 1 } } : {};
+  // Per-channel keys must match OpenClaw's guild channel schema: requireMention, users, enabled, skills, systemPrompt.
+  // historyLimit is channel-wide (channels.discord.historyLimit) and is left to the operator.
+  const channelCfg = m.discord?.channel_id ? { [m.discord.channel_id]: { requireMention: false, users } } : {};
   return {
     agents: { ownership: "explicit", entries },
     bindings,

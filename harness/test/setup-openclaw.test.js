@@ -16,7 +16,7 @@ test("openclaw config: one coordinator + specialists, explicit ownership, Discor
     assert.equal(cfg.agents.entries["campaign_fixture-director"].workspace, path.join("/data/workspaces", "campaign_fixture-director"));
     assert.equal(cfg.bindings[0].match.peer.id, "channel_fixture");
     assert.equal(cfg.bindings[0].match.guildId, "guild_fixture");
-    assert.deepEqual(cfg.discord.guilds.guild_fixture.channels.channel_fixture.users, ["user_fixture"]);
+    assert.deepEqual(cfg.discord.guilds.guild_fixture.channels.channel_fixture, { requireMention: false, users: ["user_fixture"] }, "only schema-valid per-channel keys");
     assert.deepEqual(cfg.tools.exec, { security: "allowlist", allowlist: ["/opt/rp-harness/bin/rp"] });
     assert.deepEqual(cfg.commands.allowFrom.discord, ["user:user_fixture"]);
     assert.ok(!("model" in cfg.agents.entries.campaign_fixture), "fake/ models are not written to OpenClaw");
