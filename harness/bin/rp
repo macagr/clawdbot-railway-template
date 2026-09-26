@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
-# rp launcher: resolves the harness directory relative to this script.
+# rp launcher. Resolves the harness directory from the real script location (works through
+# symlinks such as /usr/local/bin/rp -> /opt/rp-harness/bin/rp); RP_HARNESS overrides.
 set -euo pipefail
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ -n "${RP_HARNESS:-}" ] && [ -f "$RP_HARNESS/src/cli.js" ]; then
+  DIR="$RP_HARNESS"
+else
+  SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+  DIR="$(cd "$(dirname "$SELF")/.." && pwd)"
+fi
 exec node "$DIR/src/cli.js" "$@"
