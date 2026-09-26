@@ -57,6 +57,7 @@ export function openclawConfigFor(store, { rpBin = "/opt/rp-harness/bin/rp", wor
       exec: { mode: "allowlist" },
     },
     approvals: [{ agentId: id, pattern: rpBin }],
+    specialists: Object.keys(entries).filter((k) => k !== id),
     commands: users.length ? { allowFrom: { discord: users.map((u) => `user:${u}`) } } : null,
     memory: { agents: Object.keys(entries) },
   };
@@ -66,6 +67,7 @@ export function openclawConfigFor(store, { rpBin = "/opt/rp-harness/bin/rp", wor
 export const ALLOWED_CONFIG_KEY_PATTERNS = [
   /^agents\.entries\.[a-z][a-z0-9_-]*$/,
   /^agents\.entries\.[a-z][a-z0-9_-]*\.memory\.enabled$/,
+  /^agents\.entries\.[a-z][a-z0-9_-]*\.promptMode$/,
   /^agents\.ownership$/,
   /^bindings$/,
   /^channels\.discord\.guilds\.[^.]+\.channels\.[^.]+$/,
@@ -102,6 +104,9 @@ export function configSetOps(cfg) {
   ops.push(["tools.exec.ask", undefined, { op: "unset", optional: true }]);
   ops.push(["tools.exec.mode", cfg.tools.exec.mode]);
   for (const agentId of cfg.memory.agents) ops.push([`agents.entries.${agentId}.memory.enabled`, false, { optional: true }]);
+  // Specialists receive self-contained tasks; a minimal prompt mode drops OpenClaw's memory,
+  // identity and messaging sections from their system prompt. Tolerated if the key is rejected.
+  for (const agentId of cfg.specialists || []) ops.push([`agents.entries.${agentId}.promptMode`, "minimal", { optional: true }]);
   if (cfg.commands) ops.push(["commands.allowFrom.discord", cfg.commands.allowFrom.discord, { merge: "list" }]);
   return ops;
 }

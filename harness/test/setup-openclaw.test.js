@@ -25,6 +25,9 @@ test("openclaw config: one coordinator + specialists, explicit ownership, Discor
     assert.ok(ops.some(([k]) => k === "bindings"));
     assert.ok(ops.some(([k]) => k === "tools.sessions.visibility"));
     assert.ok(ops.some(([k, v]) => k === "tools.exec.mode" && v === "allowlist"));
+    const pm = ops.filter(([k]) => k.endsWith(".promptMode"));
+    assert.deepEqual(pm.map(([k]) => k), ["agents.entries.campaign_fixture-director.promptMode", "agents.entries.campaign_fixture-novelist.promptMode", "agents.entries.campaign_fixture-editor.promptMode"], "specialists only, never the coordinator");
+    assert.ok(pm.every(([, v, o]) => v === "minimal" && o.optional));
   } finally { r.cleanup(); }
 });
 

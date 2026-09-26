@@ -78,6 +78,16 @@ test("openclaw agent envelope: usage is found under result.meta in common shapes
   assert.deepEqual(findUsage({ durationMs: 100 }), {});
 });
 
+test("openclaw agent --json envelope (2026.9.5 live shape): usage, cache and cost come from result.meta.agentMeta.usage", async () => {
+  const { extractUsage } = await import("../src/models/openclaw-cli.js");
+  const envelope = { runId: "r", status: "ok", summary: { completed: true }, result: { payloads: [{ text: "ok" }], meta: { durationMs: 3401, agentMeta: { sessionId: "s", provider: "openrouter", model: "openrouter/auto", usage: { input: 2856, output: 291, cacheRead: 37888, cacheWrite: 0, reasoningTokens: 30, total: 41035, cost: { total: 0.00064050164 } }, lastCallUsage: { input: 2856, output: 291 } } } } };
+  const u = extractUsage(envelope);
+  assert.equal(u.input_tokens, 2856); assert.equal(u.output_tokens, 291); assert.equal(u.cached_tokens, 37888);
+  assert.ok(Math.abs(u.cost - 0.00064050164) < 1e-12);
+  assert.equal(u.provider, "openrouter"); assert.equal(u.model, "openrouter/auto");
+  assert.deepEqual(extractUsage({ result: { meta: {} } }), { input_tokens: 0, output_tokens: 0, cached_tokens: 0, cost: undefined, model: undefined, provider: undefined });
+});
+
 test("openclaw agent JSON envelope: reply text is taken from payloads", () => {
   assert.equal(extractReplyText({ payloads: [{ text: "a" }, { text: "b" }] }), "a\nb");
   assert.equal(extractReplyText({ result: { payloads: ["c"] } }), "c");

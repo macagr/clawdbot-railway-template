@@ -31,16 +31,19 @@ export class OpenClawCliAdapter {
       const text = extractReplyText(data);
       if (!text) throw new ModelError("openclaw agent returned no reply text", { code: "empty", retryable: true });
       const meta = data.result?.meta || data.meta || {};
-      const u = data.usage || data.result?.usage || data.summary?.usage || meta.usage || meta.tokens || meta.tokenUsage || {};
+      // OpenClaw 2026.9.5 `agent --json`: result.meta.agentMeta.usage = { input, output, cacheRead,
+      // cacheWrite, reasoningTokens, total, cost: { total } } (per run); lastCallUsage = last model call.
+      const am = meta.agentMeta || {};
+      const u = am.usage || am.lastCallUsage || data.usage || data.result?.usage || data.summary?.usage || meta.usage || meta.tokens || meta.tokenUsage || {};
       let usage = {
         input_tokens: num(u.input ?? u.input_tokens ?? u.inputTokens ?? u.prompt_tokens ?? u.promptTokens),
         output_tokens: num(u.output ?? u.output_tokens ?? u.outputTokens ?? u.completion_tokens ?? u.completionTokens),
-        cached_tokens: num(u.cached ?? u.cached_tokens ?? u.cacheRead ?? u.cache_read_input_tokens ?? 0),
+        cached_tokens: num(u.cacheRead ?? u.cached ?? u.cached_tokens ?? u.cache_read_input_tokens ?? 0),
       };
       if (usage.input_tokens === 0 && usage.output_tokens === 0) usage = { ...usage, ...findUsage(meta) };
-      const cost = [data.costUsd, meta.costUsd, meta.cost, data.result?.costUsd, data.summary?.costUsd, u.costUsd].find((c) => typeof c === "number");
+      const cost = [u.cost?.total, am.cost?.total, data.costUsd, meta.costUsd, meta.cost, data.result?.costUsd, data.summary?.costUsd, u.costUsd].find((c) => typeof c === "number");
       this.log?.debug?.(`[openclaw-cli] ${role}/${agentId} usage=${JSON.stringify(usage)} cost=${cost ?? "n/a"} result.meta=${JSON.stringify(data.result?.meta ?? data.meta ?? null).slice(0, 500)}`);
-      return { text, usage, model: data.model || model || agentId, provider: "openclaw", cost_reported: cost };
+      return { text, usage, model: am.model || data.model || model || agentId, provider: am.provider ? `openclaw/${am.provider}` : "openclaw", cost_reported: cost };
     } finally {
       try { fs.rmSync(file, { force: true }); } catch {}
     }
@@ -78,6 +81,17 @@ function parseJsonEnvelope(stdout) {
       throw new ModelError(`openclaw agent: unparseable JSON: ${err.message}`, { code: "bad-json" });
     }
   }
+}
+
+/** Exposed for tests: usage/cost extraction from a parsed `openclaw agent --json` envelope. */
+export function extractUsage(data) {
+  const meta = data.result?.meta || data.meta || {};
+  const am = meta.agentMeta || {};
+  const u = am.usage || am.lastCallUsage || {};
+  return {
+    input_tokens: num(u.input), output_tokens: num(u.output), cached_tokens: num(u.cacheRead),
+    cost: typeof u.cost?.total === "number" ? u.cost.total : undefined, model: am.model, provider: am.provider,
+  };
 }
 
 export function extractReplyText(data) {
