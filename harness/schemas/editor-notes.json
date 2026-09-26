@@ -1,0 +1,26 @@
+{
+  "$id": "editor-notes.json",
+  "title": "Editor notes (semantic, advisory)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["notes", "revise"],
+  "properties": {
+    "revise": { "type": "boolean" },
+    "notes": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["question", "finding", "severity"],
+        "properties": {
+          "question": { "$ref": "common.json#/$defs/id" },
+          "finding": { "$ref": "common.json#/$defs/shortText" },
+          "quote": { "type": "string", "maxLength": 600 },
+          "severity": { "enum": ["low", "medium", "high"] },
+          "suggestion": { "$ref": "common.json#/$defs/shortText" }
+        }
+      }
+    }
+  }
+}

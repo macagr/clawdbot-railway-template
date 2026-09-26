@@ -1,0 +1,25 @@
+{
+  "$id": "sessions.json",
+  "title": "Specialist session cache keys (disposable)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["session_id", "specialists"],
+  "properties": {
+    "session_id": { "$ref": "common.json#/$defs/opaqueId" },
+    "started_at": { "$ref": "common.json#/$defs/timestamp" },
+    "specialists": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["session_key", "created_at", "turns", "tokens"],
+        "properties": {
+          "session_key": { "$ref": "common.json#/$defs/opaqueId" },
+          "created_at": { "$ref": "common.json#/$defs/timestamp" },
+          "turns": { "type": "integer", "minimum": 0 },
+          "tokens": { "type": "integer", "minimum": 0 }
+        }
+      }
+    }
+  }
+}

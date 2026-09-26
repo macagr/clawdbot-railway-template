@@ -1,0 +1,15 @@
+{
+  "$id": "save-result.json",
+  "title": "Save result returned by a persistence adapter",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["save_id", "status", "applied", "failed"],
+  "properties": {
+    "save_id": { "$ref": "common.json#/$defs/opaqueId" },
+    "status": { "enum": ["ok", "partial", "rejected", "duplicate", "error"] },
+    "applied": { "type": "array", "items": { "type": "string" } },
+    "failed": { "type": "array", "items": { "type": "object", "required": ["target", "error"], "properties": { "target": { "type": "string" }, "error": { "type": "string" } } } },
+    "canon_revision": { "type": ["integer", "string", "null"] },
+    "message": { "type": "string" }
+  }
+}

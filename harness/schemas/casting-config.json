@@ -1,0 +1,42 @@
+{
+  "$id": "casting-config.json",
+  "title": "Casting configuration (campaign-defined vocabularies; generic mechanics)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["axes", "names"],
+  "properties": {
+    "axes": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9_-]{0,63}$" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["values"],
+        "properties": {
+          "values": { "type": "array", "minItems": 1, "items": { "type": "string", "maxLength": 120 } },
+          "weights": { "type": "array", "items": { "type": "number", "minimum": 0 } },
+          "constrained_by": { "$ref": "common.json#/$defs/id", "description": "constraint key that may force this axis" }
+        }
+      }
+    },
+    "names": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pools"],
+      "properties": {
+        "pools": {
+          "type": "object",
+          "propertyNames": { "pattern": "^[a-z][a-z0-9_-]{0,63}$" },
+          "additionalProperties": { "type": "array", "minItems": 1, "items": { "type": "string", "maxLength": 120 } }
+        },
+        "pool_by_constraint": { "type": "object", "additionalProperties": { "$ref": "common.json#/$defs/id" } },
+        "default_pool": { "$ref": "common.json#/$defs/id" }
+      }
+    },
+    "archetypes": {
+      "type": "object",
+      "additionalProperties": { "$ref": "common.json#/$defs/stringMap" }
+    },
+    "voice_defaults": { "$ref": "common.json#/$defs/id", "description": "voice card id used as inherits for generated cards" }
+  }
+}

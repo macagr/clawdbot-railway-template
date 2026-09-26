@@ -1,0 +1,18 @@
+{
+  "$id": "meta.json",
+  "title": "Campaign state metadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["campaign_id", "revision", "canon_revision", "last_saved_revision", "schema_version"],
+  "properties": {
+    "campaign_id": { "$ref": "common.json#/$defs/id" },
+    "schema_version": { "type": "integer", "minimum": 1 },
+    "revision": { "$ref": "common.json#/$defs/revision" },
+    "canon_revision": { "type": ["integer", "string", "null"] },
+    "last_saved_revision": { "$ref": "common.json#/$defs/revision" },
+    "last_synced_at": { "$ref": "common.json#/$defs/timestamp" },
+    "last_saved_at": { "$ref": "common.json#/$defs/timestamp" },
+    "branch": { "type": ["string", "null"] },
+    "session_id": { "$ref": "common.json#/$defs/opaqueId" }
+  }
+}

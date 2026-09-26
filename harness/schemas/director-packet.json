@@ -1,0 +1,230 @@
+{
+  "$id": "director-packet.json",
+  "title": "Director output packet",
+  "$defs": {
+    "form": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["length_band", "structure", "camera", "tempo", "ending", "sense"],
+      "properties": {
+        "length_band": { "$ref": "common.json#/$defs/id" },
+        "structure": { "$ref": "common.json#/$defs/id" },
+        "camera": { "$ref": "common.json#/$defs/id" },
+        "tempo": { "$ref": "common.json#/$defs/id" },
+        "ending": { "$ref": "common.json#/$defs/id" },
+        "sense": { "$ref": "common.json#/$defs/id" }
+      }
+    },
+    "speechAct": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["act"],
+      "properties": {
+        "act": { "$ref": "common.json#/$defs/shortText" },
+        "subtext": { "$ref": "common.json#/$defs/shortText" },
+        "to": { "$ref": "common.json#/$defs/id" }
+      }
+    },
+    "npcIntent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["npc", "intent", "acting_on", "emotional_register", "speech_acts", "must_not_reveal"],
+      "properties": {
+        "npc": { "$ref": "common.json#/$defs/id" },
+        "intent": { "$ref": "common.json#/$defs/shortText" },
+        "acting_on": { "$ref": "common.json#/$defs/idList" },
+        "emotional_register": { "$ref": "common.json#/$defs/shortText" },
+        "speech_acts": { "type": "array", "items": { "$ref": "#/$defs/speechAct" }, "maxItems": 12 },
+        "must_not_reveal": { "$ref": "common.json#/$defs/idList" },
+        "speaks": { "type": "boolean" },
+        "decision_source": { "enum": ["director", "npc_call"] }
+      }
+    },
+    "factProposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "content"],
+      "properties": {
+        "ref": { "type": "string", "pattern": "^new:[a-z0-9_-]{1,40}$" },
+        "content": { "$ref": "common.json#/$defs/shortText" },
+        "truth_status": { "$ref": "common.json#/$defs/truthStatus" },
+        "authorial": { "$ref": "common.json#/$defs/authorial" },
+        "visibility": { "$ref": "common.json#/$defs/visibility" },
+        "tags": { "$ref": "common.json#/$defs/idList" },
+        "aliases": { "type": "array", "items": { "type": "string", "maxLength": 200 }, "maxItems": 16 }
+      }
+    },
+    "candidateUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op"],
+      "properties": {
+        "op": { "enum": ["propose", "abandon"] },
+        "id": { "$ref": "common.json#/$defs/opaqueId" },
+        "fact": { "type": "string", "maxLength": 80 },
+        "proposal": { "$ref": "common.json#/$defs/shortText" },
+        "proposed_status": { "$ref": "common.json#/$defs/truthStatus" }
+      }
+    },
+    "knowledgeEventProposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "fact", "to", "channel"],
+      "properties": {
+        "kind": { "enum": ["transmit", "observe", "infer", "forge"] },
+        "fact": { "type": "string", "maxLength": 80, "description": "<FACT_ID> or new:<ref>" },
+        "from": { "oneOf": [{ "$ref": "common.json#/$defs/holder" }, { "type": "null" }] },
+        "to": { "$ref": "common.json#/$defs/holder" },
+        "channel": { "$ref": "common.json#/$defs/id" },
+        "delay": { "type": "integer", "minimum": 0 },
+        "fidelity": { "$ref": "common.json#/$defs/version" },
+        "variant": { "$ref": "common.json#/$defs/shortText" },
+        "evidence": { "$ref": "common.json#/$defs/evidence" },
+        "succeeded": { "type": "boolean" },
+        "believed": { "type": "boolean" },
+        "confidence": { "$ref": "common.json#/$defs/confidence" },
+        "note": { "$ref": "common.json#/$defs/shortText" }
+      }
+    },
+    "resolutionEventProposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fact", "to_status", "cause"],
+      "properties": {
+        "fact": { "type": "string", "maxLength": 80 },
+        "to_status": { "$ref": "common.json#/$defs/truthStatus" },
+        "visibility": { "$ref": "common.json#/$defs/visibility" },
+        "candidate": { "$ref": "common.json#/$defs/opaqueId" },
+        "cause": { "$ref": "common.json#/$defs/shortText" }
+      }
+    },
+    "consequence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "description"],
+      "properties": {
+        "type": { "$ref": "common.json#/$defs/id" },
+        "actor": { "$ref": "common.json#/$defs/id" },
+        "description": { "$ref": "common.json#/$defs/shortText" }
+      }
+    },
+    "stateDeltas": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scene": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "location": { "$ref": "common.json#/$defs/id" },
+            "time": { "$ref": "common.json#/$defs/shortText" },
+            "clock_advance": { "type": "integer", "minimum": 0 },
+            "present": { "$ref": "common.json#/$defs/idList" },
+            "active_plots": { "$ref": "common.json#/$defs/idList" },
+            "summary": { "$ref": "common.json#/$defs/shortText" },
+            "scene_end": { "type": "boolean" },
+            "extensions": { "type": "object" }
+          }
+        },
+        "relationships": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["from", "to"],
+            "properties": {
+              "from": { "$ref": "common.json#/$defs/id" },
+              "to": { "$ref": "common.json#/$defs/id" },
+              "stance": { "$ref": "common.json#/$defs/shortText" },
+              "trust": { "$ref": "common.json#/$defs/confidence" },
+              "debt": { "$ref": "common.json#/$defs/shortText" },
+              "history_add": { "$ref": "common.json#/$defs/shortText" }
+            }
+          }
+        },
+        "unresolved": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["op"],
+            "properties": {
+              "op": { "enum": ["add", "resolve", "drop"] },
+              "id": { "$ref": "common.json#/$defs/opaqueId" },
+              "question": { "$ref": "common.json#/$defs/shortText" },
+              "actors": { "$ref": "common.json#/$defs/idList" },
+              "locations": { "$ref": "common.json#/$defs/idList" },
+              "plots": { "$ref": "common.json#/$defs/idList" },
+              "facts": { "type": "array", "items": { "type": "string", "maxLength": 80 } }
+            }
+          }
+        },
+        "actors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["op"],
+            "properties": {
+              "op": { "enum": ["appearance", "promote", "retire", "cast"] },
+              "id": { "$ref": "common.json#/$defs/id" },
+              "summary": { "$ref": "common.json#/$defs/shortText" },
+              "tier": { "enum": ["extra", "minor", "major"] },
+              "casting_request": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["ref", "role"],
+                "properties": {
+                  "ref": { "type": "string", "pattern": "^new:[a-z0-9_-]{1,40}$" },
+                  "role": { "$ref": "common.json#/$defs/shortText" },
+                  "kind": { "enum": ["npc", "group"] },
+                  "constraints": { "$ref": "common.json#/$defs/stringMap" },
+                  "groups": { "type": "array", "items": { "type": "object", "required": ["group"], "properties": { "group": { "$ref": "common.json#/$defs/id" }, "role": { "$ref": "common.json#/$defs/id" } } } },
+                  "returning": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["turn_summary", "form", "scene", "perception", "npc_intents", "reveals_allowed", "reveals_forbidden", "stop_for_player"],
+  "properties": {
+    "turn_id": { "$ref": "common.json#/$defs/opaqueId" },
+    "mode": { "$ref": "common.json#/$defs/id" },
+    "presentation": { "$ref": "common.json#/$defs/id" },
+    "presentation_suggestion": { "$ref": "common.json#/$defs/id" },
+    "turn_summary": { "$ref": "common.json#/$defs/shortText" },
+    "form": { "$ref": "#/$defs/form" },
+    "scene": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["location", "present", "beats"],
+      "properties": {
+        "location": { "$ref": "common.json#/$defs/id" },
+        "time": { "$ref": "common.json#/$defs/shortText" },
+        "present": { "$ref": "common.json#/$defs/idList" },
+        "beats": { "type": "array", "items": { "$ref": "common.json#/$defs/shortText" }, "maxItems": 12 }
+      }
+    },
+    "perception": { "$ref": "common.json#/$defs/shortText" },
+    "fact_proposals": { "type": "array", "items": { "$ref": "#/$defs/factProposal" }, "maxItems": 20 },
+    "npc_intents": { "type": "array", "items": { "$ref": "#/$defs/npcIntent" }, "maxItems": 12 },
+    "npc_decision_requests": { "$ref": "common.json#/$defs/idList", "description": "NPCs whose consequential decision should be made by a fresh NPC call" },
+    "knowledge_events": { "type": "array", "items": { "$ref": "#/$defs/knowledgeEventProposal" }, "maxItems": 40 },
+    "resolution_events": { "type": "array", "items": { "$ref": "#/$defs/resolutionEventProposal" }, "maxItems": 20 },
+    "candidate_updates": { "type": "array", "items": { "$ref": "#/$defs/candidateUpdate" }, "maxItems": 20 },
+    "reveals_allowed": { "type": "array", "items": { "type": "string", "maxLength": 80 } },
+    "reveals_forbidden": { "type": "array", "items": { "type": "string", "maxLength": 80 } },
+    "uncertainty": { "type": "array", "items": { "$ref": "common.json#/$defs/shortText" }, "maxItems": 20 },
+    "consequences": { "type": "array", "items": { "$ref": "#/$defs/consequence" }, "maxItems": 20 },
+    "state_deltas": { "$ref": "#/$defs/stateDeltas" },
+    "mind_deltas": { "type": "array", "items": { "$ref": "mind-delta.json" }, "maxItems": 12 },
+    "stop_for_player": { "type": "boolean" },
+    "stop_reason": { "$ref": "common.json#/$defs/shortText" },
+    "novelist_notes": { "$ref": "common.json#/$defs/shortText" }
+  }
+}

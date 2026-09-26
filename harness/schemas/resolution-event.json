@@ -1,0 +1,18 @@
+{
+  "$id": "resolution-event.json",
+  "title": "ResolutionEvent (the only way truth changes)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "turn", "fact", "to_status", "authorial", "visibility", "cause"],
+  "properties": {
+    "id": { "$ref": "common.json#/$defs/opaqueId" },
+    "turn": { "$ref": "common.json#/$defs/opaqueId" },
+    "fact": { "$ref": "common.json#/$defs/id" },
+    "from_status": { "$ref": "common.json#/$defs/truthStatus" },
+    "to_status": { "$ref": "common.json#/$defs/truthStatus" },
+    "authorial": { "$ref": "common.json#/$defs/authorial" },
+    "visibility": { "$ref": "common.json#/$defs/visibility" },
+    "candidate": { "$ref": "common.json#/$defs/opaqueId" },
+    "cause": { "$ref": "common.json#/$defs/shortText" }
+  }
+}

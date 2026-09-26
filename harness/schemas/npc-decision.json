@@ -1,0 +1,18 @@
+{
+  "$id": "npc-decision.json",
+  "title": "NPC decision call output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["npc", "intent", "acting_on", "emotional_register", "speech_acts", "must_not_reveal"],
+  "properties": {
+    "npc": { "$ref": "common.json#/$defs/id" },
+    "intent": { "$ref": "common.json#/$defs/shortText" },
+    "acting_on": { "$ref": "common.json#/$defs/idList" },
+    "emotional_register": { "$ref": "common.json#/$defs/shortText" },
+    "speech_acts": { "type": "array", "items": { "$ref": "director-packet.json#/$defs/speechAct" }, "maxItems": 12 },
+    "must_not_reveal": { "$ref": "common.json#/$defs/idList" },
+    "speaks": { "type": "boolean" },
+    "mind_delta": { "$ref": "mind-delta.json" },
+    "rationale": { "$ref": "common.json#/$defs/shortText", "description": "private; never shown to Novelist or player" }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "id": "npc_b",
+  "style_only": true,
+  "display_name": "<NPC_B>",
+  "rhythm": "Long, looping sentences that circle before landing.",
+  "register": "Warm, teasing, faintly theatrical.",
+  "vocabulary": "Food, weather, small courtesies.",
+  "sentences": "Trails off, then finishes with a hook.",
+  "humor": "Self-deprecating; laughs first.",
+  "stress": { "anger": "Becomes very polite.", "fear": "Talks more, faster." },
+  "status_modulation": { "stranger": "Over-familiar on purpose." },
+  "does_not_sound_like": ["A soldier.", "Anyone in a hurry."],
+  "examples": ["“Well now, look who found the door.”", "“Sit, sit, I was just about to… no, later.”"]
+}

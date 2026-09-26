@@ -1,0 +1,15 @@
+{
+  "$id": "craft.json",
+  "title": "Craft state (non-canonical, non-evidential writing guidance)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["subject", "non_evidential"],
+  "properties": {
+    "subject": { "$ref": "common.json#/$defs/opaqueId", "description": "npc id, 'director', or 'novelist'" },
+    "non_evidential": { "const": true },
+    "updated_turn": { "$ref": "common.json#/$defs/opaqueId" },
+    "habits_to_avoid": { "type": "array", "items": { "$ref": "common.json#/$defs/shortText" }, "maxItems": 40 },
+    "recent_patterns": { "type": "array", "items": { "$ref": "common.json#/$defs/shortText" }, "maxItems": 40 },
+    "performance_notes": { "type": "array", "items": { "$ref": "common.json#/$defs/shortText" }, "maxItems": 40 }
+  }
+}

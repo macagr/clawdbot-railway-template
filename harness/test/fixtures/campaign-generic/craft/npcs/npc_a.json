@@ -1,0 +1,7 @@
+{
+  "subject": "npc_a",
+  "non_evidential": true,
+  "habits_to_avoid": ["opening with a weather observation"],
+  "recent_patterns": [],
+  "performance_notes": ["let pauses do the threatening"]
+}

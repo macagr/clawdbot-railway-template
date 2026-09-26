@@ -1,0 +1,89 @@
+{
+  "$id": "mind.json",
+  "title": "NPC mind (authoritative explicit mental state; holdings are NOT stored here)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["actor", "revision", "dispositions", "priorities", "intentions", "suspicions", "interpretations", "emotional_baseline"],
+  "properties": {
+    "actor": { "$ref": "common.json#/$defs/id" },
+    "revision": { "$ref": "common.json#/$defs/revision" },
+    "updated_turn": { "$ref": "common.json#/$defs/opaqueId" },
+    "dispositions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["stance"],
+        "properties": {
+          "stance": { "$ref": "common.json#/$defs/shortText" },
+          "trust": { "$ref": "common.json#/$defs/confidence" },
+          "heat": { "enum": ["cold", "cool", "warm", "hot"] }
+        }
+      }
+    },
+    "priorities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["goal", "weight"],
+        "properties": {
+          "goal": { "$ref": "common.json#/$defs/shortText" },
+          "weight": { "type": "number", "minimum": 0, "maximum": 1 },
+          "horizon": { "enum": ["immediate", "scene", "arc"] }
+        }
+      }
+    },
+    "intentions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "what", "status"],
+        "properties": {
+          "id": { "$ref": "common.json#/$defs/opaqueId" },
+          "what": { "$ref": "common.json#/$defs/shortText" },
+          "toward": { "$ref": "common.json#/$defs/id" },
+          "trigger": { "$ref": "common.json#/$defs/shortText" },
+          "status": { "enum": ["held", "active", "done", "abandoned"] },
+          "since_turn": { "$ref": "common.json#/$defs/opaqueId" }
+        }
+      }
+    },
+    "suspicions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["hypothesis", "confidence"],
+        "properties": {
+          "about": { "$ref": "common.json#/$defs/opaqueId" },
+          "hypothesis": { "$ref": "common.json#/$defs/shortText" },
+          "confidence": { "$ref": "common.json#/$defs/confidence" }
+        }
+      }
+    },
+    "interpretations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["of", "reading"],
+        "properties": {
+          "of": { "$ref": "common.json#/$defs/opaqueId" },
+          "reading": { "$ref": "common.json#/$defs/shortText" },
+          "unresolved": { "type": "boolean" }
+        }
+      }
+    },
+    "emotional_baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "register": { "$ref": "common.json#/$defs/shortText" },
+        "volatility": { "enum": ["low", "medium", "high"] }
+      }
+    },
+    "extensions": { "type": "object", "description": "campaign-approved explicit mental state" }
+  }
+}

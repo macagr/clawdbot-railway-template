@@ -1,0 +1,4 @@
+# Tokens that must never appear in generic harness files (fixture denylist).
+# One per line; case-insensitive substring match.
+fixturetown
+fixtureville

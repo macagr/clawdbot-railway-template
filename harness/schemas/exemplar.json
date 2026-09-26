@@ -1,0 +1,19 @@
+{
+  "$id": "exemplar.json",
+  "title": "Exemplar / anti-exemplar metadata (STYLE ONLY, never a fact source)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "kind", "turn_id", "style_only", "presentation", "actors", "created_at", "text"],
+  "properties": {
+    "id": { "$ref": "common.json#/$defs/opaqueId" },
+    "kind": { "enum": ["good", "flat"] },
+    "turn_id": { "$ref": "common.json#/$defs/opaqueId" },
+    "style_only": { "const": true },
+    "presentation": { "$ref": "common.json#/$defs/id" },
+    "actors": { "$ref": "common.json#/$defs/idList" },
+    "created_at": { "$ref": "common.json#/$defs/timestamp" },
+    "note": { "$ref": "common.json#/$defs/shortText" },
+    "pinned": { "type": "boolean" },
+    "text": { "type": "string", "maxLength": 20000 }
+  }
+}

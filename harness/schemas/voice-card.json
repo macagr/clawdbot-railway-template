@@ -1,0 +1,24 @@
+{
+  "$id": "voice-card.json",
+  "title": "Voice card (STYLE ONLY; examples are non-evidential)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "style_only"],
+  "properties": {
+    "id": { "$ref": "common.json#/$defs/id" },
+    "style_only": { "const": true },
+    "display_name": { "type": "string", "maxLength": 120 },
+    "inherits": { "$ref": "common.json#/$defs/id" },
+    "rhythm": { "$ref": "common.json#/$defs/shortText" },
+    "register": { "$ref": "common.json#/$defs/shortText" },
+    "vocabulary": { "$ref": "common.json#/$defs/shortText" },
+    "sentences": { "$ref": "common.json#/$defs/shortText" },
+    "humor": { "$ref": "common.json#/$defs/shortText" },
+    "stress": { "type": "object", "additionalProperties": { "$ref": "common.json#/$defs/shortText" }, "description": "keyed by emotional state, e.g. anger/fear/affection" },
+    "status_modulation": { "type": "object", "additionalProperties": { "$ref": "common.json#/$defs/shortText" }, "description": "keyed by relationship/status label" },
+    "does_not_sound_like": { "type": "array", "items": { "$ref": "common.json#/$defs/shortText" }, "maxItems": 20 },
+    "examples": { "type": "array", "items": { "type": "string", "maxLength": 600 }, "maxItems": 20 },
+    "contextual": { "type": "object", "additionalProperties": { "$ref": "common.json#/$defs/shortText" } },
+    "notes": { "$ref": "common.json#/$defs/shortText" }
+  }
+}

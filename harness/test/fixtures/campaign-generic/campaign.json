@@ -1,0 +1,43 @@
+{
+  "id": "campaign_fixture",
+  "display_name": "Generic fixture campaign",
+  "schema_version": 1,
+  "player": { "character": "pc_fixture", "user_ids": ["user_fixture"] },
+  "roles": {
+    "coordinator": { "model": "fake/coordinator" },
+    "director": { "model": "fake/director", "temperature": 0.4, "input_price_per_m": 1, "output_price_per_m": 4 },
+    "novelist": { "model": "fake/novelist", "temperature": 0.9, "fallback": "fake/novelist-fallback", "input_price_per_m": 1, "output_price_per_m": 4 },
+    "editor": { "model": "fake/editor" },
+    "npc": { "model": "fake/npc" },
+    "casting": { "model": "fake/casting" },
+    "summary": { "model": "fake/summary" },
+    "propagation": { "model": "fake/propagation" }
+  },
+  "budget": { "per_turn": 1, "per_day": 5, "per_month": 50 },
+  "canon": {
+    "operational_canon": "canon/operational.md",
+    "style_rules": "canon/style.md",
+    "recent_history": "canon/recent.md",
+    "detailed_history": "canon/history",
+    "references": { "world": "canon/world" }
+  },
+  "context": { "recent_turns": 4, "recent_prose_turns": 2, "max_voice_cards": 3, "operational_max_chars": 4000, "exemplars": 2, "anti_exemplars": 1 },
+  "modes": {
+    "semantic": { "default": "play", "enabled": ["play", "development", "research", "branch", "meta", "save"], "canon_affecting": ["play"] },
+    "presentation": {
+      "default": "scene",
+      "enabled": ["scene", "montage", "strategic", "doc", "pressure"],
+      "auto_transition": "director_suggests",
+      "allowed_transitions": { "scene": ["montage", "pressure"], "montage": ["scene"], "pressure": ["scene"] },
+      "editor_modes": ["scene", "pressure"]
+    }
+  },
+  "agency": { "fragment": "prompts/agency.md", "pc_dialogue_by_model": false, "stop_on": ["dialogue", "major_action", "irreversible"] },
+  "editor": { "when": "selected", "max_revisions": 1 },
+  "form": { "decay": 0.7 },
+  "propagation": { "mode": "rules", "catalog": "channels.json", "scene_end_pass": true },
+  "casting": { "enabled": true, "config": "casting.json" },
+  "save": { "adapter": "local", "local_dir": "persistence", "session_summary": false, "endpoint_env": "RP_SAVE_URL", "token_env": "RP_SAVE_TOKEN", "sync_endpoint_env": "RP_SYNC_URL" },
+  "discord": { "guild_id": "guild_fixture", "channel_id": "channel_fixture", "user_ids": ["user_fixture"], "threads": "sessions" },
+  "denylist": "denylist.txt"
+}

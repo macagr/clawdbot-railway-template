@@ -1,0 +1,17 @@
+{
+  "$id": "candidate.json",
+  "title": "Candidate resolution (explicit, non-canonical)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "fact", "proposal", "status", "created_turn"],
+  "properties": {
+    "id": { "$ref": "common.json#/$defs/opaqueId" },
+    "fact": { "$ref": "common.json#/$defs/id" },
+    "proposal": { "$ref": "common.json#/$defs/shortText" },
+    "proposed_status": { "$ref": "common.json#/$defs/truthStatus" },
+    "status": { "enum": ["open", "abandoned", "promoted"] },
+    "created_turn": { "$ref": "common.json#/$defs/opaqueId" },
+    "updated_turn": { "$ref": "common.json#/$defs/opaqueId" },
+    "note": { "$ref": "common.json#/$defs/shortText" }
+  }
+}

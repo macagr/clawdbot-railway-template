@@ -1,0 +1,69 @@
+{
+  "$id": "channel-catalog.json",
+  "title": "Propagation channel catalog (campaign-defined content, generic mechanics)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["channels"],
+  "properties": {
+    "channels": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9_-]{0,63}$" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "delay", "fidelity", "evidence"],
+        "properties": {
+          "label": { "type": "string", "maxLength": 120 },
+          "delay": { "type": "integer", "minimum": 0 },
+          "fidelity": { "$ref": "common.json#/$defs/version" },
+          "evidence": { "$ref": "common.json#/$defs/evidence" },
+          "reliability": { "type": "number", "minimum": 0, "maximum": 1, "description": "default success probability; deterministic rules may override" },
+          "belief": { "$ref": "common.json#/$defs/confidence" },
+          "access": { "type": "array", "items": { "$ref": "common.json#/$defs/id" }, "description": "groups/roles that can use this channel; empty = anyone" }
+        }
+      }
+    },
+    "scopes": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9_-]{0,63}$" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["group"],
+        "properties": {
+          "group": { "$ref": "common.json#/$defs/id" },
+          "roles": { "$ref": "common.json#/$defs/idList", "description": "member roles that can access facts held at this scope" },
+          "actors": { "$ref": "common.json#/$defs/idList", "description": "explicit actors with access" }
+        }
+      }
+    },
+    "rules": {
+      "type": "array",
+      "description": "deterministic scene-end propagation rules",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "when", "channel", "to"],
+        "properties": {
+          "id": { "$ref": "common.json#/$defs/id" },
+          "when": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "fact_tags": { "$ref": "common.json#/$defs/idList" },
+              "held_by_group": { "$ref": "common.json#/$defs/id" },
+              "held_by_actor": { "$ref": "common.json#/$defs/id" },
+              "visibility": { "$ref": "common.json#/$defs/visibility" }
+            }
+          },
+          "channel": { "$ref": "common.json#/$defs/id" },
+          "to": { "$ref": "common.json#/$defs/holder" },
+          "delay": { "type": "integer", "minimum": 0 },
+          "fidelity": { "$ref": "common.json#/$defs/version" },
+          "succeeded": { "type": "boolean" },
+          "believed": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

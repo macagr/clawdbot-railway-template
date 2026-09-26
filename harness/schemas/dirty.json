@@ -1,0 +1,23 @@
+{
+  "$id": "dirty.json",
+  "title": "Dirty ledger (committed but unsaved revisions)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["entries"],
+  "properties": {
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["revision", "turn_id", "at"],
+        "properties": {
+          "revision": { "$ref": "common.json#/$defs/revision" },
+          "turn_id": { "$ref": "common.json#/$defs/opaqueId" },
+          "at": { "$ref": "common.json#/$defs/timestamp" },
+          "summary": { "$ref": "common.json#/$defs/shortText" }
+        }
+      }
+    }
+  }
+}

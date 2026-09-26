@@ -1,0 +1,59 @@
+{
+  "$id": "turn.json",
+  "title": "Turn transaction record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["turn_id", "event_id", "status", "revision_base", "started_at", "input", "transport"],
+  "properties": {
+    "turn_id": { "$ref": "common.json#/$defs/opaqueId" },
+    "event_id": { "$ref": "common.json#/$defs/opaqueId" },
+    "status": { "enum": ["received", "planned", "drafted", "validated", "committed", "delivered", "abandoned", "failed"] },
+    "revision_base": { "$ref": "common.json#/$defs/revision" },
+    "revision_committed": { "$ref": "common.json#/$defs/revision" },
+    "started_at": { "$ref": "common.json#/$defs/timestamp" },
+    "updated_at": { "$ref": "common.json#/$defs/timestamp" },
+    "transport": { "$ref": "common.json#/$defs/id" },
+    "branch": { "$ref": "common.json#/$defs/id" },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text"],
+      "properties": {
+        "text": { "$ref": "common.json#/$defs/text" },
+        "kind": { "enum": ["play", "command", "ooc"] },
+        "mode": { "$ref": "common.json#/$defs/id" },
+        "presentation": { "$ref": "common.json#/$defs/id" },
+        "player": { "$ref": "common.json#/$defs/opaqueId" }
+      }
+    },
+    "context_selection": { "type": "object" },
+    "packet": { "type": "object" },
+    "npc_decisions": { "type": "array", "items": { "type": "object" } },
+    "draft": { "type": "string" },
+    "editor": { "type": "object" },
+    "revised": { "type": "string" },
+    "validation": { "type": "object" },
+    "output": { "type": "string" },
+    "delivery": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "transport": { "$ref": "common.json#/$defs/id" },
+        "message_ids": { "type": "array", "items": { "$ref": "common.json#/$defs/opaqueId" } },
+        "delivered_at": { "$ref": "common.json#/$defs/timestamp" },
+        "attempts": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "usage": { "type": "object" },
+    "error": { "type": "string", "maxLength": 4000 },
+    "history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["status", "at"],
+        "properties": { "status": { "type": "string" }, "at": { "$ref": "common.json#/$defs/timestamp" }, "note": { "type": "string", "maxLength": 500 } }
+      }
+    }
+  }
+}

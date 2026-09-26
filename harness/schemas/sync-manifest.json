@@ -1,0 +1,30 @@
+{
+  "$id": "sync-manifest.json",
+  "title": "Canon pulled from durable storage",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["campaign", "canon_revision", "files"],
+  "properties": {
+    "campaign": { "$ref": "common.json#/$defs/id" },
+    "canon_revision": { "type": ["integer", "string"] },
+    "exported_at": { "$ref": "common.json#/$defs/timestamp" },
+    "files": {
+      "type": "object",
+      "description": "canon role -> markdown text (roles defined by the campaign manifest)",
+      "additionalProperties": { "type": "string" }
+    },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scene": { "$ref": "scene.json" },
+        "facts": { "type": "array", "items": { "$ref": "fact.json" } },
+        "relationships": { "$ref": "relationships.json" },
+        "unresolved": { "$ref": "unresolved.json" },
+        "candidates": { "type": "array", "items": { "$ref": "candidate.json" } },
+        "actors": { "$ref": "actors.json" },
+        "minds": { "type": "array", "items": { "$ref": "mind.json" } }
+      }
+    }
+  }
+}

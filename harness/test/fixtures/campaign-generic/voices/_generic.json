@@ -1,0 +1,9 @@
+{
+  "id": "_generic",
+  "style_only": true,
+  "display_name": "Generic minor character",
+  "rhythm": "Ordinary speech rhythm; nothing marked.",
+  "register": "Neutral, situational.",
+  "does_not_sound_like": ["A named principal character."],
+  "examples": []
+}

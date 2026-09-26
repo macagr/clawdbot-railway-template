@@ -1,0 +1,16 @@
+{
+  "$id": "holding.json",
+  "title": "Holding (an actor or scoped group holds a version of a fact)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["holder", "version", "confidence", "evidence", "via"],
+  "properties": {
+    "holder": { "$ref": "common.json#/$defs/holder" },
+    "version": { "$ref": "common.json#/$defs/version" },
+    "variant": { "$ref": "common.json#/$defs/shortText" },
+    "confidence": { "$ref": "common.json#/$defs/confidence" },
+    "evidence": { "$ref": "common.json#/$defs/evidence" },
+    "via": { "$ref": "common.json#/$defs/opaqueId" },
+    "since_turn": { "$ref": "common.json#/$defs/opaqueId" }
+  }
+}

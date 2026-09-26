@@ -1,0 +1,35 @@
+{
+  "$id": "common.json",
+  "title": "Shared definitions",
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$" },
+    "opaqueId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "timestamp": { "type": "string", "minLength": 4, "maxLength": 64 },
+    "revision": { "type": "integer", "minimum": 0 },
+    "text": { "type": "string", "maxLength": 20000 },
+    "shortText": { "type": "string", "maxLength": 2000 },
+    "idList": { "type": "array", "items": { "$ref": "#/$defs/id" }, "uniqueItems": true },
+    "actorHolder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id"],
+      "properties": { "type": { "const": "actor" }, "id": { "$ref": "#/$defs/id" } }
+    },
+    "groupHolder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id", "scope"],
+      "properties": { "type": { "const": "group" }, "id": { "$ref": "#/$defs/id" }, "scope": { "$ref": "#/$defs/id" } }
+    },
+    "holder": { "oneOf": [{ "$ref": "#/$defs/actorHolder" }, { "$ref": "#/$defs/groupHolder" }] },
+    "version": { "enum": ["accurate", "partial", "distorted", "false"] },
+    "confidence": { "enum": ["low", "medium", "high"] },
+    "evidence": { "enum": ["witnessed", "documentary", "testimony", "hearsay", "inference", "forged", "background"] },
+    "truthStatus": { "enum": ["true", "false", "unresolved", "disputed"] },
+    "authorial": { "enum": ["decided", "undecided"] },
+    "visibility": { "enum": ["public", "restricted", "gm_only"] },
+    "persistence": { "enum": ["provisional", "saved", "superseded", "retracted"] },
+    "stringMap": { "type": "object", "additionalProperties": { "type": "string", "maxLength": 4000 } },
+    "anyMap": { "type": "object" }
+  }
+}

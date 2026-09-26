@@ -1,0 +1,26 @@
+{
+  "$id": "knowledge-event.json",
+  "title": "KnowledgeEvent (the only way a holding changes)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "turn", "kind", "fact", "to", "channel", "delay", "fidelity", "evidence", "succeeded", "believed", "confidence"],
+  "properties": {
+    "id": { "$ref": "common.json#/$defs/opaqueId" },
+    "turn": { "$ref": "common.json#/$defs/opaqueId" },
+    "kind": { "enum": ["transmit", "observe", "infer", "forge", "background"] },
+    "fact": { "$ref": "common.json#/$defs/id" },
+    "from": { "oneOf": [{ "$ref": "common.json#/$defs/holder" }, { "type": "null" }] },
+    "to": { "$ref": "common.json#/$defs/holder" },
+    "channel": { "$ref": "common.json#/$defs/id" },
+    "delay": { "type": "integer", "minimum": 0, "description": "scene-time units before the holding applies; 0 = immediate" },
+    "fidelity": { "$ref": "common.json#/$defs/version" },
+    "variant": { "$ref": "common.json#/$defs/shortText" },
+    "evidence": { "$ref": "common.json#/$defs/evidence" },
+    "succeeded": { "type": "boolean" },
+    "believed": { "type": "boolean" },
+    "confidence": { "$ref": "common.json#/$defs/confidence" },
+    "applied": { "type": "boolean" },
+    "applies_at": { "type": "integer", "minimum": 0, "description": "absolute scene-time when a delayed event applies" },
+    "note": { "$ref": "common.json#/$defs/shortText" }
+  }
+}

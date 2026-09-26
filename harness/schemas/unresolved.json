@@ -1,0 +1,28 @@
+{
+  "$id": "unresolved.json",
+  "title": "Unresolved threads/questions",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["items"],
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "question", "status"],
+        "properties": {
+          "id": { "$ref": "common.json#/$defs/opaqueId" },
+          "question": { "$ref": "common.json#/$defs/shortText" },
+          "status": { "enum": ["open", "resolved", "dropped"] },
+          "actors": { "$ref": "common.json#/$defs/idList" },
+          "locations": { "$ref": "common.json#/$defs/idList" },
+          "plots": { "$ref": "common.json#/$defs/idList" },
+          "facts": { "$ref": "common.json#/$defs/idList" },
+          "created_turn": { "$ref": "common.json#/$defs/opaqueId" },
+          "updated_turn": { "$ref": "common.json#/$defs/opaqueId" }
+        }
+      }
+    }
+  }
+}

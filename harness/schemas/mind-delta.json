@@ -1,0 +1,27 @@
+{
+  "$id": "mind-delta.json",
+  "title": "Mind delta (applied at commit; every field optional)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["actor"],
+  "properties": {
+    "actor": { "$ref": "common.json#/$defs/id" },
+    "dispositions": { "$ref": "mind.json#/properties/dispositions" },
+    "priorities_set": { "$ref": "mind.json#/properties/priorities" },
+    "intentions_add": { "$ref": "mind.json#/properties/intentions" },
+    "intentions_update": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status"],
+        "properties": { "id": { "$ref": "common.json#/$defs/opaqueId" }, "status": { "enum": ["held", "active", "done", "abandoned"] } }
+      }
+    },
+    "suspicions_add": { "$ref": "mind.json#/properties/suspicions" },
+    "suspicions_clear": { "type": "array", "items": { "$ref": "common.json#/$defs/opaqueId" } },
+    "interpretations_add": { "$ref": "mind.json#/properties/interpretations" },
+    "emotional_baseline": { "$ref": "mind.json#/properties/emotional_baseline" },
+    "extensions": { "type": "object" }
+  }
+}

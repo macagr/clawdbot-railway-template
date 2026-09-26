@@ -1,0 +1,29 @@
+{
+  "$id": "fact.json",
+  "title": "Fact (ledger record)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "content", "created_turn", "persistence", "truth", "holdings", "provenance"],
+  "properties": {
+    "id": { "$ref": "common.json#/$defs/id" },
+    "content": { "$ref": "common.json#/$defs/shortText" },
+    "created_turn": { "$ref": "common.json#/$defs/opaqueId" },
+    "created_revision": { "$ref": "common.json#/$defs/revision" },
+    "tags": { "$ref": "common.json#/$defs/idList" },
+    "aliases": { "type": "array", "items": { "type": "string", "minLength": 2, "maxLength": 200 }, "maxItems": 32 },
+    "persistence": { "$ref": "common.json#/$defs/persistence" },
+    "superseded_by": { "$ref": "common.json#/$defs/id" },
+    "truth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "authorial", "visibility"],
+      "properties": {
+        "status": { "$ref": "common.json#/$defs/truthStatus" },
+        "authorial": { "$ref": "common.json#/$defs/authorial" },
+        "visibility": { "$ref": "common.json#/$defs/visibility" }
+      }
+    },
+    "holdings": { "type": "array", "items": { "$ref": "holding.json" } },
+    "provenance": { "type": "array", "items": { "$ref": "common.json#/$defs/opaqueId" } }
+  }
+}

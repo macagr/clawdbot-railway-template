@@ -1,0 +1,25 @@
+{
+  "$id": "relationships.json",
+  "title": "Relationship state (directed edges keyed 'from>to')",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["edges"],
+  "properties": {
+    "edges": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9_-]*>[a-z][a-z0-9_-]*$" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["stance"],
+        "properties": {
+          "stance": { "$ref": "common.json#/$defs/shortText" },
+          "trust": { "$ref": "common.json#/$defs/confidence" },
+          "debt": { "$ref": "common.json#/$defs/shortText" },
+          "history": { "type": "array", "items": { "$ref": "common.json#/$defs/shortText" }, "maxItems": 50 },
+          "updated_turn": { "$ref": "common.json#/$defs/opaqueId" }
+        }
+      }
+    }
+  }
+}

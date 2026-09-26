@@ -1,0 +1,31 @@
+{
+  "$id": "actors.json",
+  "title": "Actor roster (PC, NPCs, groups)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["actors"],
+  "properties": {
+    "actors": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9_-]{0,63}$" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "kind", "tier", "display_name"],
+        "properties": {
+          "id": { "$ref": "common.json#/$defs/id" },
+          "kind": { "enum": ["pc", "npc", "group"] },
+          "tier": { "enum": ["extra", "minor", "major"] },
+          "display_name": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "aliases": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 120 }, "maxItems": 20 },
+          "groups": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["group"], "properties": { "group": { "$ref": "common.json#/$defs/id" }, "role": { "$ref": "common.json#/$defs/id" } } } },
+          "voice": { "$ref": "common.json#/$defs/id", "description": "voice card id; defaults to actor id" },
+          "generated": { "type": "boolean" },
+          "axes": { "$ref": "common.json#/$defs/stringMap" },
+          "appearances": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["turn", "summary"], "properties": { "turn": { "$ref": "common.json#/$defs/opaqueId" }, "summary": { "$ref": "common.json#/$defs/shortText" } } }, "maxItems": 200 },
+          "retired": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

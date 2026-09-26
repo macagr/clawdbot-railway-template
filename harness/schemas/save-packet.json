@@ -1,0 +1,71 @@
+{
+  "$id": "save-packet.json",
+  "title": "Save packet (idempotent, revision-checked)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "save_id", "campaign", "session_id", "created_at", "source", "expect", "append", "replace", "events"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "save_id": { "$ref": "common.json#/$defs/opaqueId" },
+    "campaign": { "$ref": "common.json#/$defs/id" },
+    "session_id": { "$ref": "common.json#/$defs/opaqueId" },
+    "created_at": { "$ref": "common.json#/$defs/timestamp" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["revision_from", "revision_to", "turn_ids"],
+      "properties": {
+        "revision_from": { "$ref": "common.json#/$defs/revision" },
+        "revision_to": { "$ref": "common.json#/$defs/revision" },
+        "turn_ids": { "type": "array", "items": { "$ref": "common.json#/$defs/opaqueId" } }
+      }
+    },
+    "expect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["canon_revision"],
+      "properties": { "canon_revision": { "type": ["integer", "string", "null"] } }
+    },
+    "append": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "chronicle": { "type": "object", "additionalProperties": false, "required": ["heading", "markdown"], "properties": { "heading": { "type": "string", "maxLength": 300 }, "markdown": { "type": "string", "maxLength": 200000 } } },
+        "audit": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["turn_id", "summary"], "properties": { "turn_id": { "$ref": "common.json#/$defs/opaqueId" }, "summary": { "$ref": "common.json#/$defs/shortText" }, "revision": { "$ref": "common.json#/$defs/revision" } } } },
+        "divergences": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["markdown"], "properties": { "markdown": { "type": "string", "maxLength": 20000 } } } },
+        "references": { "type": "object", "additionalProperties": { "type": "array", "items": { "type": "object", "required": ["markdown"], "properties": { "markdown": { "type": "string" } } } } }
+      }
+    },
+    "replace": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scene": { "$ref": "scene.json" },
+        "facts": { "type": "array", "items": { "$ref": "fact.json" } },
+        "relationships": { "$ref": "relationships.json" },
+        "unresolved": { "$ref": "unresolved.json" },
+        "candidates": { "type": "array", "items": { "$ref": "candidate.json" } },
+        "actors": { "$ref": "actors.json" },
+        "minds": { "type": "array", "items": { "$ref": "mind.json" } }
+      }
+    },
+    "deltas": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "relationships": { "type": "array", "items": { "type": "object" } },
+        "minds": { "type": "array", "items": { "$ref": "mind-delta.json" } }
+      }
+    },
+    "events": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["knowledge", "resolution"],
+      "properties": {
+        "knowledge": { "type": "array", "items": { "$ref": "knowledge-event.json" } },
+        "resolution": { "type": "array", "items": { "$ref": "resolution-event.json" } }
+      }
+    },
+    "summary": { "type": "string", "maxLength": 20000 }
+  }
+}

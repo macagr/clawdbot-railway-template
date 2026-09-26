@@ -1,0 +1,19 @@
+{
+  "$id": "novelist-output.json",
+  "title": "Novelist output (annotated prose)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["prose"],
+  "properties": {
+    "prose": { "type": "string", "minLength": 1, "maxLength": 40000, "description": "literary prose with ⟦say <ID>⟧…⟦/say⟧ spans" },
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "words": { "type": "integer", "minimum": 0 },
+        "npcs_voiced": { "$ref": "common.json#/$defs/idList" },
+        "notes": { "$ref": "common.json#/$defs/shortText" }
+      }
+    }
+  }
+}

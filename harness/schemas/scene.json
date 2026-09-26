@@ -1,0 +1,20 @@
+{
+  "$id": "scene.json",
+  "title": "Current scene state",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["scene_id", "location", "time", "present", "mode", "presentation"],
+  "properties": {
+    "scene_id": { "$ref": "common.json#/$defs/opaqueId" },
+    "location": { "$ref": "common.json#/$defs/id" },
+    "time": { "$ref": "common.json#/$defs/shortText", "description": "campaign-defined display time" },
+    "clock": { "type": "integer", "minimum": 0, "description": "monotonic scene-time counter used for event delays" },
+    "present": { "$ref": "common.json#/$defs/idList" },
+    "mode": { "$ref": "common.json#/$defs/id" },
+    "presentation": { "$ref": "common.json#/$defs/id" },
+    "presentation_forced": { "type": "boolean" },
+    "active_plots": { "$ref": "common.json#/$defs/idList" },
+    "summary": { "$ref": "common.json#/$defs/shortText" },
+    "extensions": { "type": "object" }
+  }
+}

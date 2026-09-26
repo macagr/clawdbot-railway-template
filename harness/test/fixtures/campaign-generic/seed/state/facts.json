@@ -1,0 +1,50 @@
+{
+  "facts": [
+    {
+      "id": "fact_a",
+      "content": "<PC_ID> noticed the marking on the object at <LOCATION_A>.",
+      "created_turn": "seed",
+      "tags": ["public_incident"],
+      "aliases": ["the marking"],
+      "persistence": "saved",
+      "truth": { "status": "true", "authorial": "decided", "visibility": "public" },
+      "holdings": [
+        { "holder": { "type": "actor", "id": "pc_fixture" }, "version": "accurate", "confidence": "high", "evidence": "witnessed", "via": "seed" }
+      ],
+      "provenance": ["seed"]
+    },
+    {
+      "id": "fact_b",
+      "content": "<GROUP_A> plans to move against <NPC_B>.",
+      "created_turn": "seed",
+      "aliases": ["the plan against B"],
+      "persistence": "saved",
+      "truth": { "status": "true", "authorial": "decided", "visibility": "gm_only" },
+      "holdings": [
+        { "holder": { "type": "actor", "id": "npc_a" }, "version": "accurate", "confidence": "high", "evidence": "documentary", "via": "seed" }
+      ],
+      "provenance": ["seed"]
+    },
+    {
+      "id": "fact_c",
+      "content": "Who owns <LOCATION_B> now.",
+      "created_turn": "seed",
+      "persistence": "saved",
+      "truth": { "status": "unresolved", "authorial": "undecided", "visibility": "restricted" },
+      "holdings": [],
+      "provenance": ["seed"]
+    },
+    {
+      "id": "fact_d",
+      "content": "<NPC_B> owes money to <GROUP_A>.",
+      "created_turn": "seed",
+      "persistence": "saved",
+      "truth": { "status": "false", "authorial": "decided", "visibility": "restricted" },
+      "holdings": [
+        { "holder": { "type": "actor", "id": "npc_b" }, "version": "false", "variant": "<NPC_B> believes the debt is real.", "confidence": "medium", "evidence": "hearsay", "via": "seed" },
+        { "holder": { "type": "group", "id": "group_a", "scope": "scope_a" }, "version": "accurate", "confidence": "high", "evidence": "documentary", "via": "seed" }
+      ],
+      "provenance": ["seed"]
+    }
+  ]
+}

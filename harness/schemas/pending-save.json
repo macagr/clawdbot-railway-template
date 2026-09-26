@@ -1,0 +1,14 @@
+{
+  "$id": "pending-save.json",
+  "title": "Pending save (serialized packet awaiting a successful remote write)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["packet", "attempts", "last_error"],
+  "properties": {
+    "packet": { "$ref": "save-packet.json" },
+    "attempts": { "type": "integer", "minimum": 0 },
+    "last_error": { "type": ["string", "null"] },
+    "last_result": { "type": ["object", "null"] },
+    "updated_at": { "$ref": "common.json#/$defs/timestamp" }
+  }
+}

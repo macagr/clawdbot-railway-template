@@ -1,0 +1,205 @@
+{
+  "$id": "campaign-manifest.json",
+  "title": "Campaign manifest (campaign.json)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "display_name", "schema_version", "player", "roles", "canon", "modes", "agency"],
+  "properties": {
+    "id": { "$ref": "common.json#/$defs/id" },
+    "display_name": { "type": "string", "maxLength": 200 },
+    "schema_version": { "const": 1 },
+    "language": { "type": "string", "maxLength": 16 },
+    "player": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["character"],
+      "properties": {
+        "character": { "$ref": "common.json#/$defs/id" },
+        "user_ids": { "type": "array", "items": { "type": "string", "maxLength": 64 } }
+      }
+    },
+    "roles": {
+      "type": "object",
+      "description": "role -> model settings; keys: coordinator, director, novelist, editor, npc, casting, summary, propagation",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["model"],
+        "properties": {
+          "model": { "type": "string", "minLength": 1, "maxLength": 200, "description": "model alias or provider/model ref" },
+          "fallback": { "type": "string", "maxLength": 200 },
+          "temperature": { "type": "number", "minimum": 0, "maximum": 2 },
+          "reasoning": { "enum": ["off", "minimal", "low", "medium", "high"] },
+          "max_tokens": { "type": "integer", "minimum": 1 },
+          "timeout_ms": { "type": "integer", "minimum": 1000 },
+          "input_price_per_m": { "type": "number", "minimum": 0 },
+          "output_price_per_m": { "type": "number", "minimum": 0 },
+          "agent_id": { "$ref": "common.json#/$defs/id", "description": "OpenClaw agent for the openclaw-cli caller; defaults to <campaign>-<role>" }
+        }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "per_turn": { "type": "number", "minimum": 0 },
+        "per_day": { "type": "number", "minimum": 0 },
+        "per_month": { "type": "number", "minimum": 0 },
+        "warn_fraction": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "canon": {
+      "type": "object",
+      "description": "canon role -> relative path under the workspace",
+      "additionalProperties": false,
+      "properties": {
+        "operational_canon": { "type": "string" },
+        "style_rules": { "type": "string" },
+        "recent_history": { "type": "string" },
+        "detailed_history": { "type": "string" },
+        "divergence_history": { "type": "string" },
+        "references": { "type": "object", "additionalProperties": { "type": "string" } }
+      }
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "recent_turns": { "type": "integer", "minimum": 0, "maximum": 50 },
+        "recent_prose_turns": { "type": "integer", "minimum": 0, "maximum": 10 },
+        "max_voice_cards": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "operational_max_chars": { "type": "integer", "minimum": 0 },
+        "voice_card_max_chars": { "type": "integer", "minimum": 0 },
+        "history_on_demand": { "type": "boolean" },
+        "exemplars": { "type": "integer", "minimum": 0, "maximum": 10 },
+        "anti_exemplars": { "type": "integer", "minimum": 0, "maximum": 10 }
+      }
+    },
+    "modes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["semantic", "presentation"],
+      "properties": {
+        "semantic": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["default", "enabled"],
+          "properties": {
+            "default": { "$ref": "common.json#/$defs/id" },
+            "enabled": { "$ref": "common.json#/$defs/idList" },
+            "canon_affecting": { "$ref": "common.json#/$defs/idList", "description": "modes whose turns commit canon (others are non-canon)" },
+            "fragments": { "type": "string", "description": "dir of <MODE>.md fragments" }
+          }
+        },
+        "presentation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["default", "enabled"],
+          "properties": {
+            "default": { "$ref": "common.json#/$defs/id" },
+            "enabled": { "$ref": "common.json#/$defs/idList" },
+            "fragments": { "type": "string" },
+            "auto_transition": { "enum": ["off", "director_suggests", "director_changes"] },
+            "allowed_transitions": { "type": "object", "additionalProperties": { "$ref": "common.json#/$defs/idList" } },
+            "editor_modes": { "$ref": "common.json#/$defs/idList", "description": "presentation modes in which the Editor runs (when editor.when = selected)" }
+          }
+        }
+      }
+    },
+    "agency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fragment"],
+      "properties": {
+        "fragment": { "type": "string" },
+        "pc_dialogue_by_model": { "type": "boolean" },
+        "stop_on": { "$ref": "common.json#/$defs/idList" }
+      }
+    },
+    "editor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "when": { "enum": ["disabled", "selected", "all", "manual"] },
+        "max_revisions": { "type": "integer", "minimum": 0, "maximum": 3 },
+        "questions": { "type": "array", "items": { "type": "string", "maxLength": 500 } }
+      }
+    },
+    "form": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "decay": { "type": "number", "minimum": 0, "maximum": 1 },
+        "dimensions": { "type": "object", "additionalProperties": { "$ref": "common.json#/$defs/idList" } }
+      }
+    },
+    "propagation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "enum": ["disabled", "rules", "model_assisted"] },
+        "catalog": { "type": "string" },
+        "scene_end_pass": { "type": "boolean" }
+      }
+    },
+    "casting": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "config": { "type": "string" }
+      }
+    },
+    "commands": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "array", "items": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$" } },
+        "aliases": { "type": "object", "additionalProperties": { "type": "string" } }
+      }
+    },
+    "save": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "adapter": { "enum": ["local", "webhook", "none"] },
+        "session_summary": { "type": "boolean" },
+        "endpoint_env": { "type": "string" },
+        "token_env": { "type": "string" },
+        "sync_endpoint_env": { "type": "string" },
+        "local_dir": { "type": "string" },
+        "timeout_ms": { "type": "integer", "minimum": 1000 },
+        "retries": { "type": "integer", "minimum": 0, "maximum": 5 }
+      }
+    },
+    "sessions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reset_on_resume": { "type": "boolean" },
+        "reset_on_scene_end": { "type": "boolean" },
+        "token_threshold": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "discord": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "guild_id": { "type": "string", "maxLength": 64 },
+        "channel_id": { "type": "string", "maxLength": 64 },
+        "user_ids": { "type": "array", "items": { "type": "string", "maxLength": 64 } },
+        "threads": { "enum": ["off", "sessions", "branches_on_request"] }
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_chars": { "type": "integer", "minimum": 200 },
+        "show_presentation_tag": { "type": "boolean" }
+      }
+    },
+    "denylist": { "type": "string", "description": "path to a text file of campaign-specific tokens forbidden in generic files" },
+    "extensions": { "type": "object" }
+  }
+}
