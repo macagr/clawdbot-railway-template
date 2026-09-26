@@ -31,6 +31,11 @@ If the overhead is still large, point the specialist roles at a provider directl
 
 Usage from `openclaw agent --json` is read from `result.meta.agentMeta.usage` (`input`, `output`, `cacheRead`, `cost.total`), per invocation.
 
+## Coordinator model: production observations
+
+- **Never rely on the coordinator model to echo `rp` output.** Observed on 2026.9.5: after a successful `rp` exec the coordinator's post-tool model pass completed (HTTP 200) yet produced no visible assistant payload, and OpenClaw logged `visible channel turn dispatched with no queued reply payloads … cause=completed`. The player received nothing although the turn was committed. This is why the Discord coordinator posts chunks itself with the `message` tool and confirms with `rp deliver` (see [transports.md](transports.md)); the model's final reply is `NO_REPLY` and carries no fiction.
+- **`openrouter/auto` can route the coordinator to endpoints with incompatible reasoning requirements.** Observed: HTTP 400 `Reasoning is mandatory for this endpoint and cannot be disabled`, then OpenClaw's `unsupported thinking level for openrouter/openrouter/auto; retrying with minimal`, which succeeded. Harmless in that instance, but it adds latency and a failure mode to the relay. Pin the coordinator (`roles.coordinator.model` in `campaign.json`, written to `agents.entries.<CAMPAIGN_ID>.model` by `rp setup-openclaw`) to one cheap, tool-capable model whose reasoning settings are known rather than an auto router. Specialists are unaffected by this: their calls go through the harness adapters with per-role settings.
+
 ## Prompt caching
 
 Contexts put stable material first (generic prompt, campaign fragments, canon) and changing material last (scene, recent turns, input), so providers with prefix caching benefit without any special handling.
