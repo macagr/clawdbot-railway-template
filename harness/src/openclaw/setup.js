@@ -96,6 +96,9 @@ export function configSetOps(cfg) {
   if (cfg.discord) for (const [gid, g] of Object.entries(cfg.discord.guilds)) for (const [cid, c] of Object.entries(g.channels)) ops.push([`channels.discord.guilds.${gid}.channels.${cid}`, c]);
   ops.push(["tools.agentToAgent.enabled", true]);
   ops.push(["tools.sessions.visibility", cfg.tools.sessions.visibility]);
+  // Legacy exec policy keys cannot coexist with mode; remove them first (no-op when absent).
+  ops.push(["tools.exec.security", undefined, { op: "unset", optional: true }]);
+  ops.push(["tools.exec.ask", undefined, { op: "unset", optional: true }]);
   ops.push(["tools.exec.mode", cfg.tools.exec.mode]);
   for (const agentId of cfg.memory.agents) ops.push([`agents.entries.${agentId}.memory.enabled`, false, { optional: true }]);
   if (cfg.commands) ops.push(["commands.allowFrom.discord", cfg.commands.allowFrom.discord, { merge: "list" }]);
@@ -132,11 +135,11 @@ export function writeWorkspaces(store, { workspacesRoot, transport = "discord" }
 export async function applyConfig(cfg, { bin = process.env.OPENCLAW_BIN || "openclaw", run = spawnSync, dryRun = false, log = () => {} } = {}) {
   const results = [];
   for (const [key, value, opts = {}] of configSetOps(cfg)) {
-    const args = ["config", "set", "--strict-json", key, JSON.stringify(value)];
+    const args = opts.op === "unset" ? ["config", "unset", key] : ["config", "set", "--strict-json", key, JSON.stringify(value)];
     if (dryRun) { results.push({ key, args, dryRun: true }); log(`${bin} ${args.map(quote).join(" ")}`); continue; }
     const r = await run(bin, args);
-    results.push({ key, code: r.code, output: r.output });
-    if (r.code !== 0 && !opts.optional) throw new Error(`openclaw config set ${key} failed (${r.code}): ${r.output.slice(-400)}`);
+    results.push({ key, op: opts.op || "set", code: r.code, output: r.output });
+    if (r.code !== 0 && !opts.optional) throw new Error(`openclaw config ${opts.op || "set"} ${key} failed (${r.code}): ${r.output.slice(-400)}`);
   }
   const approvals = [];
   const instructions = [];

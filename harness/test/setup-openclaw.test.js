@@ -32,9 +32,15 @@ test("live-schema guard: generated config keys stay within the OpenClaw 2026.9.5
   const r = makeRunner();
   try {
     const ops = configSetOps(openclawConfigFor(r.store));
-    for (const [key] of ops) assert.ok(ALLOWED_CONFIG_KEY_PATTERNS.some((re) => re.test(key)), `unexpected config key ${key}`);
-    const keys = ops.map(([k]) => k);
-    for (const bad of ["tools.exec.security", "tools.exec.allowlist", "tools.exec.ask"]) assert.ok(!keys.includes(bad), `${bad} is not a valid 2026.9.5 key`);
+    const sets = ops.filter(([, , o]) => !o || o.op !== "unset");
+    for (const [key] of sets) assert.ok(ALLOWED_CONFIG_KEY_PATTERNS.some((re) => re.test(key)), `unexpected config key ${key}`);
+    const setKeys = sets.map(([k]) => k);
+    for (const bad of ["tools.exec.security", "tools.exec.allowlist", "tools.exec.ask"]) assert.ok(!setKeys.includes(bad), `${bad} is never SET (not a valid 2026.9.5 key)`);
+    // legacy keys are unset (tolerated) before mode is set, so mode never collides with them
+    const idx = (k, op) => ops.findIndex(([key, , o]) => key === k && (o?.op || "set") === op);
+    assert.ok(idx("tools.exec.security", "unset") >= 0 && idx("tools.exec.ask", "unset") >= 0);
+    assert.ok(idx("tools.exec.security", "unset") < idx("tools.exec.mode", "set"));
+    assert.ok(ops.find(([k, , o]) => k === "tools.exec.security")[2].optional);
     const channelOp = ops.find(([k]) => k.startsWith("channels.discord.guilds."));
     assert.ok(!("historyLimit" in channelOp[1]), "historyLimit is channel-wide, not per channel");
     // exec must never be broadened by the generator
@@ -74,6 +80,7 @@ test("applyConfig: dry run prints config and approval commands; config failure a
     const dry = await applyConfig(cfg, { dryRun: true, log: (l) => lines.push(l) });
     assert.equal(dry.length + dry.approvals.length, lines.length);
     assert.match(lines[0], /^openclaw config set --strict-json agents\.entries\.campaign_fixture /);
+    assert.ok(lines.includes("openclaw config unset tools.exec.security"));
     assert.match(lines.at(-1), /^openclaw approvals allowlist add --gateway --agent campaign_fixture --pattern \/opt\/rp-harness\/bin\/rp$/);
     const calls = [];
     const run = async (bin, args) => { calls.push(args); return { code: args[3]?.endsWith?.("memory.enabled") ? 1 : 0, output: "" }; };
