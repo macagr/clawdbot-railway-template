@@ -134,17 +134,20 @@ test("workspaces: coordinator AGENTS.md relays only; specialists get self-contai
     const coord = fs.readFileSync(path.join(r.dir, "AGENTS.md"), "utf8");
     // --campaign is a directory: the coordinator runs from its workspace, so the absolute root is required
     const root = path.resolve(r.dir);
-    assert.ok(coord.includes(`\`/opt/rp-harness/bin/rp turn --campaign ${root} --transport discord --event-id <message id if available> --text-env\``), "rp turn: absolute rp binary, absolute root, --text-env");
-    assert.ok(coord.includes(`\`/opt/rp-harness/bin/rp command --campaign ${root} --transport discord`), "rp command uses the absolute binary and campaign root");
+    // Discord: one procedure for every message through the real transport, then explicit delivery
+    assert.ok(coord.includes(`\`/opt/rp-harness/bin/rp discord --campaign ${root} --event-env\``), "rp discord: absolute rp binary, absolute root, --event-env");
+    assert.ok(coord.includes(`\`/opt/rp-harness/bin/rp deliver --campaign ${root} --turn <turn_id> --transport discord --message-id <id1> --message-id <id2> ...\``), "explicit rp deliver with the returned message ids");
+    assert.match(coord, /`RP_DISCORD_EVENT_JSON`/, "event JSON travels as structured exec env");
+    assert.match(coord, /`NO_REPLY`/, "final assistant reply suppressed after explicit sends");
+    assert.match(coord, /do not call `deliver`[\s\S]*undelivered/, "send failure leaves the turn committed-undelivered");
+    assert.ok(!coord.includes("rp turn ") && !coord.includes("rp command "), "no PLAY vs command classification in the coordinator");
     assert.ok(!coord.includes("--campaign campaign_fixture "), "never a bare campaign id");
     assert.ok(!coord.includes(path.join(root, "campaign_fixture")), "no <campaign>/<campaign> path");
-    // player text travels as structured exec env, never through the shell
-    assert.match(coord, /`RP_PLAYER_INPUT` = the player's message, verbatim/);
-    assert.ok(!coord.includes("--stdin") && !coord.includes("<<") && !coord.includes("EOF"), "no heredoc/stdin instructions");
+    assert.ok(!coord.includes("--stdin") && !coord.includes("<<") && !coord.includes("EOF") && !coord.includes("--text-env"), "no heredoc/stdin/text-env instructions");
     const invocations = [...coord.matchAll(/`(\/opt\/rp-harness\/bin\/rp [^`]+)`/g)].map((m) => m[1]);
     assert.equal(invocations.length, 2);
     for (const inv of invocations) {
-      const stripped = inv.replace(/<message id if available>/g, "").replace(/<the message verbatim, including its arguments>/g, "");
+      const stripped = inv.replace(/<turn_id>|<id1>|<id2>/g, "");
       assert.ok(!/[<>|;&`$]|\bsh -c\b|bash/.test(stripped), `no shell syntax in generated invocation: ${inv}`);
       assert.ok(inv.startsWith("/opt/rp-harness/bin/rp "), "absolute executable, same as the allowlist entry");
     }
@@ -172,20 +175,21 @@ test("coordinator AGENTS: custom workspace root renders its own absolute path; t
     const store = CampaignStore.init(custom);
     writeWorkspaces(store, { workspacesRoot: path.dirname(custom), transport: "discord", rpBin: "/custom/bin/rp" });
     const coord = fs.readFileSync(path.join(custom, "AGENTS.md"), "utf8");
-    assert.ok(coord.includes(`\`/custom/bin/rp turn --campaign ${path.resolve(custom)} --transport discord`), "custom rp binary propagates from the rpBin option");
+    assert.ok(coord.includes(`\`/custom/bin/rp discord --campaign ${path.resolve(custom)} --event-env\``), "custom rp binary propagates from the rpBin option");
     assert.ok(!coord.includes("/opt/rp-harness"), "default binary is not hard-coded in the template");
-    const turnLine = coord.split("\n").find((l) => l.includes("rp turn --campaign"));
-    const cmdLine = coord.split("\n").find((l) => l.includes("rp command --campaign"));
-    const campaignArg = (line) => line.match(/--campaign (.*?) --transport/)[1];
-    assert.equal(campaignArg(turnLine), path.resolve(custom));
-    assert.equal(campaignArg(cmdLine), path.resolve(custom));
+    const discordLine = coord.split("\n").find((l) => l.includes("rp discord --campaign"));
+    const deliverLine = coord.split("\n").find((l) => l.includes("rp deliver --campaign"));
+    const campaignArg = (line) => line.match(/--campaign (.*?) --(?:event-env|turn)/)[1];
+    assert.equal(campaignArg(discordLine), path.resolve(custom));
+    assert.equal(campaignArg(deliverLine), path.resolve(custom));
     assert.ok(!coord.includes("/data/workspaces"), "custom root: nothing hard-coded");
     assert.ok(!coord.includes(path.join(custom, "campaign_fixture")), "no duplicated <campaign>/<campaign> segment");
-    // Simulate the coordinator: exec from inside the workspace with the generated --campaign value.
+    // Simulate the coordinator: exec from inside the workspace with the generated --campaign value and env event.
     const CLI = fileURLToPath(new URL("../src/cli.js", import.meta.url));
-    const r = childProcess.spawnSync(process.execPath, [CLI, "command", "--campaign", campaignArg(cmdLine), "--transport", "discord", "--", "!status"], { cwd: custom, encoding: "utf8", env: { ...process.env, RP_LOG_LEVEL: "silent" } });
+    const event = { message_id: "m1", channel_id: "channel_fixture", guild_id: "guild_fixture", user_id: "user_fixture", text: "!status" };
+    const r = childProcess.spawnSync(process.execPath, [CLI, "discord", "--campaign", campaignArg(discordLine), "--event-env"], { cwd: custom, encoding: "utf8", env: { ...process.env, RP_LOG_LEVEL: "silent", RP_DISCORD_EVENT_JSON: JSON.stringify(event) } });
     assert.equal(r.status, 0, r.stderr);
-    assert.match(r.stdout, /revision 0/);
+    assert.match(JSON.parse(r.stdout).chunks[0], /revision 0/);
     assert.doesNotMatch(r.stderr, /ENOENT/);
     // The old bare-id form is exactly the production failure: it must fail with the doubled path.
     const bad = childProcess.spawnSync(process.execPath, [CLI, "command", "--campaign", "campaign_fixture", "--", "/status"], { cwd: custom, encoding: "utf8", env: { ...process.env, RP_LOG_LEVEL: "silent" } });

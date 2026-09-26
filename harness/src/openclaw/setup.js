@@ -163,7 +163,10 @@ export function writeWorkspaces(store, { workspacesRoot, transport = "discord", 
   // env (RP_PLAYER_INPUT, read by --text-env), never inside the command string: allowlist mode
   // rejects heredocs/pipes, and player text must not be shell-parsed at all.
   const campaign_root = path.resolve(store.root);
-  writeFileAtomic(coord, fill(genericPrompt("coordinator-AGENTS"), { campaign_id: m.id, campaign_root, rp_bin: rpBin || DEFAULT_RP_BIN, transport, command_prefix }));
+  // Discord: one procedure for every message (rp discord --event-env → chunks → message tool →
+  // rp deliver → NO_REPLY). Other transports use the turn/command template.
+  const template = transport === "discord" ? "coordinator-AGENTS-discord" : "coordinator-AGENTS";
+  writeFileAtomic(coord, fill(genericPrompt(template), { campaign_id: m.id, campaign_root, rp_bin: rpBin || DEFAULT_RP_BIN, transport, command_prefix }));
   written.push(coord);
   const soul = path.join(store.root, "SOUL.md");
   if (!exists(soul)) { writeFileAtomic(soul, `Coordinator for ${m.display_name}. Relay only. No narration, no opinions about the fiction.\n`); written.push(soul); }

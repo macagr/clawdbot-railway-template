@@ -25,7 +25,8 @@ Play
   turn --campaign <dir> [--event-id <id>] [--transport cli|discord|openclaw-ui] [--player <id>] [--show-stop|--hide-stop] (--text <t> | --stdin | --text-env)
        --text-env reads the player message from the RP_PLAYER_INPUT environment variable (no shell redirection needed)
   command --campaign <dir> [--event-id <id>] [--transport <t>] -- /<command> [args]   (--transport discord also accepts the Discord prefix form, e.g. !status)
-  discord --campaign <dir> --event <json-file|->      handle one normalized Discord event; prints JSON {chunks, turn_id}
+  discord --campaign <dir> (--event <json-file|-> | --event-env)   handle one normalized Discord event; prints JSON {chunks, turn_id?, command?, redelivery?}
+       --event-env reads the event JSON from the RP_DISCORD_EVENT_JSON environment variable (coordinator path; no shell redirection)
   deliver --campaign <dir> --turn <id> [--message-id <id>...]   mark a committed turn delivered
   pending --campaign <dir>                            list committed-but-undelivered turns
 
@@ -66,6 +67,30 @@ function readStdin() { return fs.readFileSync(0, "utf8"); }
 
 /** The only environment variable `--text-env` reads. Fixed on purpose: the caller cannot choose one. */
 export const PLAYER_INPUT_ENV = "RP_PLAYER_INPUT";
+/** The only environment variable `rp discord --event-env` reads. Fixed on purpose. */
+export const DISCORD_EVENT_ENV = "RP_DISCORD_EVENT_JSON";
+
+/**
+ * Normalized Discord event for `rp discord`, from exactly one source: --event <file|-> or
+ * --event-env (RP_DISCORD_EVENT_JSON). The env form exists for the OpenClaw coordinator, whose exec
+ * allowlist forbids redirection and which must never place player text in a command string.
+ */
+export function readDiscordEvent(f, env = process.env) {
+  const hasFile = f.event !== undefined && f.event !== false;
+  const hasEnv = f["event-env"] !== undefined && f["event-env"] !== false;
+  if (hasFile && hasEnv) throw new Error("conflicting event sources --event and --event-env: use exactly one");
+  if (!hasFile && !hasEnv) throw new Error(`no event: use --event <json file|-> or --event-env (reads ${DISCORD_EVENT_ENV})`);
+  let text;
+  if (hasEnv) {
+    if (f["event-env"] !== true) throw new Error(`--event-env takes no value; it always reads ${DISCORD_EVENT_ENV}`);
+    text = env[DISCORD_EVENT_ENV];
+    if (text === undefined || !String(text).trim()) throw new Error(`--event-env: environment variable ${DISCORD_EVENT_ENV} is not set or empty (pass the normalized event JSON as exec env, not in the command)`);
+  } else text = f.event === "-" || f.event === true ? readStdin() : fs.readFileSync(f.event, "utf8");
+  let raw;
+  try { raw = JSON.parse(text); } catch (err) { throw new Error(`${hasEnv ? DISCORD_EVENT_ENV : "--event"}: invalid JSON (${err.message})`); }
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error(`${hasEnv ? DISCORD_EVENT_ENV : "--event"}: expected a JSON object {message_id, channel_id, guild_id, user_id, text}`);
+  return raw;
+}
 
 /**
  * Player text for `turn`, from exactly one source: --text <t>, --stdin, or --text-env (RP_PLAYER_INPUT).
@@ -151,7 +176,7 @@ export async function main(argv = process.argv.slice(2), { env = process.env } =
       print(r.handled ? r.text : "not a command"); return 0;
     }
     case "discord": {
-      const raw = f.event === "-" || !f.event ? JSON.parse(readStdin()) : readJson(f.event);
+      const raw = readDiscordEvent(f, env);
       const d = new DiscordTransport(h);
       const r = await d.handleInbound(raw);
       print(r); return r.refused ? 3 : 0;

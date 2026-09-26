@@ -46,6 +46,7 @@ With `openclaw:<agent>` model refs the scenarios exercise the OpenClaw CLI adapt
 | Stuck lock | `rp repair-lock --force` (only when no turn is running) |
 | Crash mid-commit | automatic: the journal is rolled forward on next open |
 | Crash mid-turn | `/resume` or any `rp` start abandons incomplete turns; the player re-sends |
+| Turn committed but never reached Discord (send failed, coordinator crashed) | nothing to repair: `rp pending` shows it; `!resume` in the channel resends the stored output and marks that same turn delivered. Never regenerate |
 | Corrupt state file | `rp validate` names it; restore from `rp export-state` bundle (`rp import-state --confirm`), from durable canon (`/sync --discard` if provisional play is expendable), or from the volume backup |
 | Lost volume | restore volume backup, or `rp campaign update <CAMPAIGN_ID>` (re-clones the campaign repository, installs) + `/sync` (state from durable canon) + `rp import-state` if you have a bundle |
 | Campaign clone refused (dirty / diverged / unexpected origin) | inspect `CAMPAIGNS_REPO_DIR` with git yourself; the harness never merges, rebases, stashes, resets or force-updates. Removing the directory and re-running `rp campaign source-sync` re-clones |

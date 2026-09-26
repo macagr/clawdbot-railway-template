@@ -90,8 +90,11 @@ export class DiscordTransport {
   constructor(deps) { this.deps = deps; }
 
   /**
-   * Handle one inbound Discord message. Returns { chunks, turn_id?, refused? }.
-   * The caller (coordinator) posts the chunks and then calls confirmDelivery with message ids.
+   * Handle one inbound Discord message. Returns { chunks, turn_id?, command?, redelivery?, reused?, failed?, refused? }.
+   * Delivery protocol: the caller (coordinator) posts every chunk in order with the channel message
+   * tool; if turn_id is present and every post succeeded it calls confirmDelivery (rp deliver) with
+   * the posted message ids. If any post fails it does nothing else: the turn stays committed and
+   * undelivered, and `<prefix>resume` (or rp pending) surfaces it for redelivery. Never regenerate.
    */
   async handleInbound(raw) {
     const e = normalizeDiscordEvent(raw);
@@ -103,7 +106,15 @@ export class DiscordTransport {
     const line = discordCommandLine(e.text, manifest);
     if (line) {
       const r = await routeCommand(line, this.deps, { transport: "discord", eventId, player: e.user_id, prefix });
-      return { chunks: chunkForDiscord(r.text || ""), command: true, command_line: line };
+      const out = { chunks: chunkForDiscord(r.text || ""), command: true, command_line: line };
+      if (r.redeliver) {
+        // /resume: the committed-but-undelivered turn's stored output follows the status text as its
+        // own chunks; turn_id lets the caller confirm delivery of that original turn. No regeneration.
+        out.turn_id = r.redeliver.turn_id;
+        out.redelivery = true;
+        out.chunks = [...out.chunks, ...chunkForDiscord(r.redeliver.output)];
+      }
+      return out;
     }
     if (e.thread_id && (manifest.discord?.threads || "off") === "branches_on_request") {
       // A thread never creates a branch by itself; the player must create the branch explicitly.

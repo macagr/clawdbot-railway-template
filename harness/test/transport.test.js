@@ -86,6 +86,16 @@ test("discord command prefix: !cmd reaches the harness command, args preserved, 
     assert.equal(dup.reused, true); assert.equal(r.store.meta().revision, 1, "idempotent on message id");
     const sameCmdAgain = await d.handleInbound(ev({ message_id: "c1", text: "!status" }));
     assert.match(sameCmdAgain.chunks[0], /revision 1/, "commands are not deduplicated (they are reads/ops, not turns)");
+    // !resume while the play turn is still undelivered: metadata names the original turn, output follows as chunks
+    const res = await d.handleInbound(ev({ message_id: "c6", text: "!resume" }));
+    assert.equal(res.redelivery, true); assert.equal(res.turn_id, play.turn_id);
+    assert.match(res.chunks[0], new RegExp(`redelivering ${play.turn_id} below`));
+    assert.deepEqual(res.chunks.slice(1), play.chunks, "stored output, not regenerated");
+    assert.equal(r.store.meta().revision, 1);
+    d.confirmDelivery(res.turn_id, ["dm-r1", "dm-r2"]);
+    assert.equal(r.store.turn(play.turn_id).status, "delivered");
+    const none = await d.handleInbound(ev({ message_id: "c7", text: "!resume" }));
+    assert.equal(none.turn_id, undefined); assert.doesNotMatch(none.chunks[0], /redelivering/);
   } finally { r.cleanup(); }
 });
 

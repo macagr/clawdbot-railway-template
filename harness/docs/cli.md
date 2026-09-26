@@ -8,8 +8,8 @@ All commands take `--campaign <workspace dir>` unless noted. Exit codes: 0 ok, 1
 |---|---|
 | `rp turn [--event-id <id>] [--transport cli\|discord\|openclaw-ui] [--player <id>] [--show-stop\|--hide-stop] (--text <t> \| --stdin \| --text-env)` | run one turn; prints the player-facing output (stop line per `output.show_stop_reason` unless overridden). Exactly one input source: `--text`, `--stdin`, or `--text-env`, which reads the message from the environment variable `RP_PLAYER_INPUT` (fixed name; used by the OpenClaw coordinator so player text never enters a shell command). With `--transport discord`, a message that is a prefixed command (`!status`, `!foo`) is routed as a command and never becomes a turn |
 | `rp command [--event-id <id>] [--transport <t>] -- /<cmd> [args]` | run a harness command; with `--transport discord` the Discord prefix form (`-- !status`, `-- !sync --status`) is accepted and answers render with the prefix |
-| `rp discord --event <file\|->` | handle a normalized Discord event `{message_id, channel_id, guild_id, user_id, thread_id?, text}`; prints `{chunks, turn_id}` |
-| `rp deliver --turn <id> [--message-id <id>]... [--transport <t>]` | mark a committed turn delivered |
+| `rp discord (--event <file\|-> \| --event-env)` | handle a normalized Discord event `{message_id, channel_id, guild_id, user_id, thread_id?, text}` through `DiscordTransport`; prints `{chunks, turn_id?, command?, redelivery?, reused?, failed?, refused?}`; exit 3 when refused. `--event-env` reads the JSON from the fixed environment variable `RP_DISCORD_EVENT_JSON` (the coordinator path: no shell redirection, no player text in the command) |
+| `rp deliver --turn <id> [--message-id <id>]... [--transport <t>]` | mark a committed turn delivered with the Discord message ids that were actually posted |
 | `rp pending` | committed-but-undelivered turns |
 
 ## Operate

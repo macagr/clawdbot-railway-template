@@ -144,9 +144,9 @@ const scenarios = {
 2. Restart the gateway; check: openclaw agents list --bindings ; openclaw channels status --probe
 3. In the bound channel send: !status   → the coordinator must run 'rp command' and relay the status text.
    (Do not use /status in Discord: "/" is OpenClaw's native slash-command namespace and OpenClaw answers it itself.)
-4. Send a play message; the coordinator execs '/opt/rp-harness/bin/rp turn --campaign <workspace> --transport discord --event-id <message id> --text-env' with env RP_PLAYER_INPUT=<message> and posts the prose.
-5. Verify: rp pending --campaign <dir> lists the turn until 'rp deliver' is run by the coordinator; re-sending the same message id must not create a new revision.
-Sample event for 'rp discord --event -':
+4. Send a play message; the coordinator execs '/opt/rp-harness/bin/rp discord --campaign <workspace> --event-env' with env RP_DISCORD_EVENT_JSON=<event JSON>, posts each returned chunk with the message tool, then runs 'rp deliver --turn <id> --message-id ...' and ends with NO_REPLY.
+5. Verify: rp pending --campaign <dir> lists the turn until 'rp deliver' is run by the coordinator; re-sending the same message id must not create a new revision; '!resume' redelivers a pending turn.
+Sample event for 'rp discord --event -' (or RP_DISCORD_EVENT_JSON with --event-env):
 ${JSON.stringify({ message_id: "<discord message id>", channel_id: "<channel id>", guild_id: "<guild id>", user_id: "<user id>", text: "The player character waits." }, null, 2)}`);
     process.exit(0);
   },

@@ -51,8 +51,10 @@ export async function routeCommand(line, deps, { transport = "cli", eventId, pla
   const name = aliases[cmd.name] || cmd.name;
   if (!enabled.has(name) || !HANDLERS[name]) return { handled: true, text: `Unknown or disabled command ${prefix}${cmd.name}.${enabled.has("help") ? ` Try ${prefix}help.` : ""}` };
   try {
-    const text = await HANDLERS[name]({ ...deps, cmd, transport, eventId, player, prefix });
-    return { handled: true, text };
+    const out = await HANDLERS[name]({ ...deps, cmd, transport, eventId, player, prefix });
+    // Handlers return a string, or { text, ...metadata } when a transport needs more than text
+    // (e.g. /resume on Discord reports which committed turn is being redelivered).
+    return typeof out === "string" ? { handled: true, text: out } : { handled: true, ...out };
   } catch (err) {
     deps.log?.error?.(`[command /${name}] ${err.stack || err.message}`);
     return { handled: true, text: `${prefix}${name} failed: ${err.message}` };
@@ -164,7 +166,7 @@ const HANDLERS = {
     return "Usage: /branch create <id> [label] | list | discard <id> <id> | promote <id> <id> | export <id>";
   },
 
-  async resume({ store, runner, sessions, adapter, reopen }) {
+  async resume({ store, runner, sessions, adapter, reopen, transport }) {
     const lines = [];
     if (store.branch) { switchToMain(store.root); reopen?.(); lines.push(`Left branch '${store.branch}'; back on main.`); }
     const abandoned = runner?.recoverIncomplete() || [];
@@ -172,14 +174,22 @@ const HANDLERS = {
     sessions?.onResume();
     lines.push("Specialist caches reset.");
     const und = runner?.undelivered() || [];
-    if (und.length) lines.push(`${und.length} committed turn(s) were never delivered; redelivering the last one:\n\n${und[und.length - 1].output}`);
+    // Redelivery never regenerates: the committed output is resent as-is. On Discord the transport
+    // posts it as separate chunks and the coordinator confirms delivery, so the turn id is returned
+    // as metadata instead of inlining the prose.
+    let redeliver = null;
+    if (und.length) {
+      const last = und[und.length - 1];
+      if (transport === "discord") { redeliver = { turn_id: last.turn_id, output: last.output || "" }; lines.push(`${und.length} committed turn(s) were never delivered; redelivering ${last.turn_id} below.`); }
+      else lines.push(`${und.length} committed turn(s) were never delivered; redelivering the last one:\n\n${last.output}`);
+    }
     if (adapter) {
       try { const s = await syncStatus(store, adapter); lines.push(s.state === "up_to_date" ? "Durable canon is current." : `Durable canon: ${s.state.replace("_", " ")} (unsaved ${s.dirty}, local ${s.local_canon_revision}, remote ${s.remote_canon_revision}).`); }
       catch (err) { lines.push(`Could not check durable canon: ${err.message}`); }
     }
     const scene = store.scene();
     lines.push(`Scene ${scene.scene_id} at ${scene.location}${scene.time ? ` (${scene.time})` : ""}; present: ${scene.present.join(", ") || "nobody"}; mode ${scene.mode}/${scene.presentation}.`);
-    return lines.join("\n");
+    return redeliver ? { text: lines.join("\n"), redeliver } : lines.join("\n");
   },
 };
 
